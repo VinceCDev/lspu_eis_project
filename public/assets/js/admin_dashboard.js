@@ -1,0 +1,647 @@
+const { createApp } = Vue;
+createApp({
+    data() {
+        return {
+            sidebarActive: window.innerWidth >= 768,
+            companiesDropdownOpen: false,
+            systemDropdownOpen: false,
+            alumniDropdownOpen: false,
+            profileDropdownOpen: false,
+            darkMode: localStorage.getItem('darkMode') === 'true' || 
+                     (localStorage.getItem('darkMode') === null && 
+                      window.matchMedia('(prefers-color-scheme: dark)').matches),
+            showLogoutModal: false,
+            isSuperadmin: !!window.IS_SUPERADMIN,
+            markers: [
+                { lat: 14.1667, lng: 121.2167, title: 'Main Campus', alumni: 120 },
+                { lat: 14.2775, lng: 121.4158, title: 'San Pablo City', alumni: 85 },
+                { lat: 14.1833, lng: 121.3000, title: 'Santa Cruz', alumni: 65 },
+                { lat: 13.9319, lng: 121.4233, title: 'Siniloan', alumni: 90 },
+                { lat: 14.0333, lng: 121.3167, title: 'Los Baños', alumni: 45 }
+            ],
+            charts: {},
+            chartInitialized: false,
+            isMobile: window.innerWidth < 768,
+            notifications: [],
+            notificationId: 0,
+            dashboardStats: null,
+            drilldown: {
+              active: false,
+              type: '', // 'college', 'location', 'sector'
+              label: '',
+              data: null
+            },
+            profile: {
+                profile_pic: '',
+                name: '',
+            },
+            showEmploymentStatusModal: false,
+            employmentStatusLoading: true,
+            employmentStatusByCampus: [],
+            selectedCampusForChart: null,
+            campusCharts: {}
+        }
+    },
+    mounted() {
+        this.applyDarkMode();
+        document.addEventListener('click', this.handleClickOutsideProfile);
+        // Fetch dashboard stats and then initialize charts and map
+        fetch('/admin_dashboard?action=stats')
+            .then(res => res.json())
+            .then(data => {
+                this.dashboardStats = data;
+                setTimeout(() => {
+                    this.initCharts();
+                    this.initMap();
+                    this.showLogoutModal = false; // Ensure modal is hidden on load
+                }, 100);
+            });
+        // Fetched separately — it's the one chart backed by a live Gemini
+        // call, so it shouldn't hold up everything else on the page when
+        // that call is slow (or failing, e.g. an exhausted API quota).
+        fetch('/admin_dashboard?action=courseWorkAlignment')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    this.dashboardStats = this.dashboardStats || {};
+                    this.dashboardStats.course_work_alignment = data.course_work_alignment;
+                    this.renderAlignmentChart();
+                }
+            })
+            .catch(error => console.error('Error fetching course-work alignment:', error));
+        fetch('admin_profile?action=details')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.profile) {
+                    this.profile = data.profile;
+                }
+            });
+        // Loaded independently (and separately from the slower `stats` call
+        // above) so the campus list is ready to click as soon as possible.
+        this.fetchEmploymentStatusByCampus();
+        window.addEventListener('resize', this.handleResize);
+    },
+    watch: {
+        darkMode(val) {
+            this.applyDarkMode();
+            this.reinitializeCharts();
+        }
+    },
+    methods: {
+        toggleSidebar() {
+            this.sidebarActive = !this.sidebarActive;
+            this.companiesDropdownOpen = false;
+            this.alumniDropdownOpen = false;
+        },
+        handleNavClick() {
+            if (this.isMobile) {
+                this.sidebarActive = false;
+            }
+        },
+        toggleProfileDropdown() {
+            this.profileDropdownOpen = !this.profileDropdownOpen;
+        },
+        handleClickOutsideProfile(event) {
+            if (this.profileDropdownOpen && !event.target.closest('.profile-dropdown-wrapper')) {
+                this.profileDropdownOpen = false;
+            }
+        },
+        toggleDarkMode() {
+            this.darkMode = !this.darkMode;
+            localStorage.setItem('darkMode', this.darkMode.toString());
+            this.applyDarkMode();
+            this.$nextTick(() => {
+                this.applyDarkMode();
+            });
+        },
+        applyDarkMode() {
+            if (this.darkMode) {
+                document.documentElement.classList.add('dark');
+                document.body.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.body.classList.remove('dark');
+            }
+        },
+        reinitializeCharts() {
+            if (this.chartInitialized) {
+                this.destroyCharts();
+            }
+            this.initCharts();
+        },
+        destroyCharts() {
+            Object.values(this.charts).forEach(chart => {
+                if (chart && !chart._destroyed) {
+                    chart.destroy();
+                }
+            });
+            this.charts = {};
+            this.chartInitialized = false;
+        },
+        async fetchEmploymentStatusByCampus() {
+            this.employmentStatusLoading = true;
+            try {
+                const res = await fetch('/admin_dashboard?action=employmentStatusByCampus');
+                const data = await res.json();
+                this.employmentStatusByCampus = data.success ? data.campuses : [];
+            } catch (error) {
+                console.error('Error fetching employment status by campus:', error);
+                this.employmentStatusByCampus = [];
+            }
+            this.employmentStatusLoading = false;
+        },
+        openEmploymentStatusModal(campus) {
+            this.selectedCampusForChart = campus;
+            this.showEmploymentStatusModal = true;
+            this.$nextTick(() => this.renderCampusEmploymentChart(campus));
+        },
+        async openCollegeStatusModal(campus, college) {
+            try {
+                const res = await fetch(`/admin_dashboard?action=collegeEmploymentStatus&campus_id=${campus.campus_id}&college=${encodeURIComponent(college)}`);
+                const data = await res.json();
+                if (!data.success) {
+                    this.addNotification('error', 'Error', data.message || 'Failed to load college data.');
+                    return;
+                }
+                // Reuses the same modal/chart as openEmploymentStatusModal() — a
+                // college-scoped "campus" is the same shape (id/name/program stats),
+                // just further filtered on the backend.
+                const scoped = {
+                    campus_id: `${data.campus_id}_${college}`,
+                    campus_name: `${data.campus_name} — ${college}`,
+                    employment_status_per_program: data.employment_status_per_program
+                };
+                this.selectedCampusForChart = scoped;
+                this.showEmploymentStatusModal = true;
+                this.$nextTick(() => this.renderCampusEmploymentChart(scoped));
+            } catch (error) {
+                this.addNotification('error', 'Error', 'Failed to load college data.');
+            }
+        },
+        closeEmploymentStatusModal() {
+            Object.values(this.campusCharts).forEach(chart => {
+                if (chart && !chart._destroyed) {
+                    chart.destroy();
+                }
+            });
+            this.campusCharts = {};
+            this.showEmploymentStatusModal = false;
+            this.selectedCampusForChart = null;
+        },
+        renderAlignmentChart() {
+            const alignmentCtx = document.getElementById('alignmentChart');
+            if (!alignmentCtx || !this.dashboardStats || !this.dashboardStats.course_work_alignment) return;
+
+            if (this.charts.alignment && !this.charts.alignment._destroyed) {
+                this.charts.alignment.destroy();
+            }
+
+            const textColor = this.darkMode ? '#e5e7eb' : '#374151';
+            const alignmentLabels = ['Highly Aligned', 'Moderately Aligned', 'Slightly Aligned', 'Not Aligned'];
+            // Aggregate total counts for each label across all courses
+            const totalCounts = alignmentLabels.map(label => {
+                return Object.values(this.dashboardStats.course_work_alignment).reduce((sum, course) => {
+                    if (course.counts && typeof course.counts[label] === 'number') {
+                        return sum + course.counts[label];
+                    }
+                    return sum;
+                }, 0);
+            });
+            this.charts.alignment = new Chart(alignmentCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: alignmentLabels,
+                    datasets: [{
+                        data: totalCounts,
+                        backgroundColor: [
+                            'rgba(75, 192, 192, 0.7)',
+                            'rgba(54, 162, 235, 0.7)',
+                            'rgba(255, 206, 86, 0.7)',
+                            'rgba(255, 99, 132, 0.7)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { color: textColor } } }
+                }
+            });
+        },
+        renderCampusEmploymentChart(campus) {
+            const canvas = document.getElementById('employmentStatusCampusChart_' + campus.campus_id);
+            if (!canvas) return;
+
+            const textColor = this.darkMode ? '#e5e7eb' : '#374151';
+            const gridColor = this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            const programs = Object.keys(campus.employment_status_per_program || {});
+            const statusLabels = ['Probational', 'Contractual', 'Regular', 'Self-employed', 'Unemployed'];
+            const colors = [
+                ['rgba(153, 102, 255, 0.7)', 'rgba(153, 102, 255, 1)'],
+                ['rgba(255, 159, 64, 0.7)', 'rgba(255, 159, 64, 1)'],
+                ['rgba(54, 162, 235, 0.7)', 'rgba(54, 162, 235, 1)'],
+                ['rgba(75, 192, 192, 0.7)', 'rgba(75, 192, 192, 1)'],
+                ['rgba(255, 99, 132, 0.7)', 'rgba(255, 99, 132, 1)']
+            ];
+            const datasets = statusLabels.map((status, i) => ({
+                label: status,
+                data: programs.map(p => (campus.employment_status_per_program[p] && typeof campus.employment_status_per_program[p][status] === 'number') ? campus.employment_status_per_program[p][status] : 0),
+                backgroundColor: colors[i][0],
+                borderColor: colors[i][1],
+                borderWidth: 1
+            }));
+
+            this.campusCharts[campus.campus_id] = new Chart(canvas, {
+                type: 'bar',
+                data: { labels: programs, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 0 },
+                    scales: {
+                        x: { grid: { color: gridColor }, ticks: { color: textColor, autoSkip: false, maxRotation: 60, minRotation: 60, font: { size: 9 } } },
+                        y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } }
+                    },
+                    plugins: { legend: { position: 'bottom', labels: { color: textColor, boxWidth: 12, font: { size: 10 } } } }
+                }
+            });
+        },
+        initCharts() {
+            if (this.chartInitialized) return;
+            const textColor = this.darkMode ? '#e5e7eb' : '#374151';
+            const gridColor = this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            try {
+                // Chart 1: Graduates and Employment per College
+                const graduatesCtx = document.getElementById('graduatesChart');
+                if (graduatesCtx && this.dashboardStats) {
+                    const colleges = Object.keys(this.dashboardStats.graduates_per_college || {});
+                    const graduates = colleges.map(c => this.dashboardStats.graduates_per_college[c].graduates);
+                    const employed = colleges.map(c => this.dashboardStats.graduates_per_college[c].employed);
+                    this.charts.graduates = new Chart(graduatesCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: colleges,
+                            datasets: [
+                                {
+                                    label: 'Graduates',
+                                    data: graduates,
+                                    backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                                    borderColor: 'rgba(54, 162, 235, 1)',
+                                    borderWidth: 1
+                                },
+                                {
+                                    label: 'Employed',
+                                    data: employed,
+                                    backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                                    borderColor: 'rgba(75, 192, 192, 1)',
+                                    borderWidth: 1
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: { duration: 0 },
+                            scales: {
+                                x: { grid: { color: gridColor }, ticks: { color: textColor } },
+                                y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } }
+                            },
+                            plugins: { legend: { labels: { color: textColor } } }
+                        }
+                    });
+                    graduatesCtx.onclick = (evt) => {
+                        const points = this.charts.graduates.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+                        if (points.length) {
+                            const idx = points[0].index;
+                            const college = colleges[idx];
+                            this.showDrilldown('college', college);
+                        }
+                    };
+                }
+                // Chart 2: Course-Work Alignment — fetched separately (see mounted()) since
+                // it's the one Gemini-backed piece of this page; render it now only if that
+                // fetch already resolved by the time initCharts() runs.
+                this.renderAlignmentChart();
+                // Chart 3 (Employment Status per Program) moved into the per-campus modal —
+                // see openEmploymentStatusModal()/renderCampusEmploymentChart() — a single
+                // chart merging every program across every campus became unreadable.
+                // Chart 4: Work Location Distribution
+                const locationCtx = document.getElementById('locationChart');
+                if (locationCtx && this.dashboardStats) {
+                    const locLabels = ['Local', 'Abroad'];
+                    const locData = locLabels.map(l => (this.dashboardStats.work_location_distribution && typeof this.dashboardStats.work_location_distribution[l] === 'number') ? this.dashboardStats.work_location_distribution[l] : 0);
+                    this.charts.location = new Chart(locationCtx, {
+                        type: 'pie',
+                        data: {
+                            labels: locLabels,
+                            datasets: [{
+                                data: locData,
+                                backgroundColor: [
+                                    'rgba(255, 159, 64, 0.7)',
+                                    'rgba(255, 99, 132, 0.7)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: { duration: 0 },
+                            plugins: { legend: { position: 'bottom', labels: { color: textColor } } }
+                        }
+                    });
+                    locationCtx.onclick = (evt) => {
+                        const points = this.charts.location.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+                        if (points.length) {
+                            const idx = points[0].index;
+                            const location = locLabels[idx];
+                            this.showDrilldown('location', location);
+                        }
+                    };
+                }
+                // Chart 5: Employment Sector
+                const sectorCtx = document.getElementById('sectorChart');
+                if (sectorCtx && this.dashboardStats) {
+                    const sectorLabels = ['Government', 'Private'];
+                    const sectorData = sectorLabels.map(s => (this.dashboardStats.employment_sector_distribution && typeof this.dashboardStats.employment_sector_distribution[s] === 'number') ? this.dashboardStats.employment_sector_distribution[s] : 0);
+                    this.charts.sector = new Chart(sectorCtx, {
+                        type: 'polarArea',
+                        data: {
+                            labels: sectorLabels,
+                            datasets: [{
+                                data: sectorData,
+                                backgroundColor: [
+                                    'rgba(255, 99, 132, 0.7)',
+                                    'rgba(54, 162, 235, 0.7)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: { duration: 0 },
+                            plugins: { legend: { position: 'bottom', labels: { color: textColor } } }
+                        }
+                    });
+                    sectorCtx.onclick = (evt) => {
+                        const points = this.charts.sector.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+                        if (points.length) {
+                            const idx = points[0].index;
+                            const sector = sectorLabels[idx];
+                            this.showDrilldown('sector', sector);
+                        }
+                    };
+                }
+                this.chartInitialized = true;
+            } catch (e) {
+                console.error('Chart initialization error:', e);
+                this.chartInitialized = false;
+            }
+        },
+        async initMap() {
+            try {
+                const map = L.map('alumniMap').setView([14.1667, 121.2167], 10);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(map);
+
+                if (this.dashboardStats && this.dashboardStats.alumni_map) {
+                    const entries = Object.entries(this.dashboardStats.alumni_map);
+                    const addMarker = (location, alumniList, lat, lng) => {
+                        const popupHtml = alumniList.map(a =>
+                            `<div style='margin-bottom:10px;'>
+                                ${a.profile_pic ? `<div style='text-align:center;margin-bottom:4px;'><img src='${a.profile_pic}' style='width:48px;height:48px;object-fit:cover;border-radius:50%;border:2px solid #3b82f6;'></div>` : ''}
+                                <b>${a.name}</b><br>
+                                <span style='font-size:12px;'>${a.course} (${a.year_graduated})</span><br>
+                                <span style='font-size:12px;'>Status: <b>${a.status}</b></span><br>
+                                ${a.status === 'Employed' && a.work_details ? `
+                                    <div style='margin-top:4px; padding-left:8px; border-left:2px solid #3b82f6;'>
+                                        <span style='font-size:12px;'><b>Position:</b> ${a.work_details.title}</span><br>
+                                        <span style='font-size:12px;'><b>Company:</b> ${a.work_details.company}</span><br>
+                                        <span style='font-size:12px;'><b>From:</b> ${a.work_details.start_date || '-'} <b>To:</b> ${a.work_details.end_date || 'Present'}</span><br>
+                                        <span style='font-size:12px;'><b>Description:</b> ${a.work_details.description || '-'}</span>
+                                    </div>
+                                ` : ''}
+                            </div>`
+                        ).join('<hr style="margin:6px 0;">');
+                        L.marker([lat, lng]).addTo(map)
+                            .bindPopup(`<b>${location}</b><br><br>${popupHtml}`);
+                    };
+
+                    // Geocoded server-side (and cached there permanently) instead of through
+                    // a browser-side third-party CORS proxy — that proxy (api.allorigins.win)
+                    // is no longer reachable, which was silently collapsing every location
+                    // onto the same fallback point and making the whole map look like one marker.
+                    const coordinates = await this.geocodeLocations(entries.map(([location]) => location));
+                    entries.forEach(([location, alumniList]) => {
+                        const coords = coordinates[location] || { lat: 14.1667, lng: 121.2167 };
+                        addMarker(location, alumniList, coords.lat, coords.lng);
+                    });
+                }
+            } catch (e) {
+                console.error('Map initialization error:', e);
+            }
+        },
+        async geocodeLocations(locations) {
+            try {
+                const response = await fetch('/admin_dashboard?action=geocode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ locations })
+                });
+                const data = await response.json();
+                return data.success ? data.coordinates : {};
+            } catch (error) {
+                return {};
+            }
+        },
+        confirmLogout() {
+            this.showLogoutModal = true;
+        },
+        logout() {
+            window.location.href = 'logout';
+        },
+        handleResize() {
+            this.isMobile = window.innerWidth < 768;
+            if (window.innerWidth >= 768) {
+                this.sidebarActive = true;
+            } else {
+                this.sidebarActive = false;
+            }
+        },
+        // Mirrors DashboardStats::COLLEGE_ABBREVIATIONS / admin_reports.js's copy of the
+        // same helper, so the college-drilldown buttons here match the abbreviations
+        // used everywhere else in the app (worksheet tab names, etc.).
+        getCollegeAbbreviation(collegeName) {
+            const abbreviations = {
+                "College of Computer Studies": "CCS",
+                "College of Business Administration and Accountancy": "CBAA",
+                "College of Arts and Sciences": "CAS",
+                "College of Teacher Education": "CTE",
+                "College of Engineering": "COE",
+                "College of Agriculture": "CA",
+                "College of Criminal Justice Education": "CCJE",
+                "College of Industrial Technology": "CIT",
+                "College of International Hospitality and Tourism Management": "CIHTM",
+                "College of Nursing and Allied Health": "CNAH",
+                "College of Fisheries": "CF",
+                "College of Food Nutrition and Dietetics": "CFND"
+            };
+            if (abbreviations[collegeName]) return abbreviations[collegeName];
+
+            const skipWords = new Set(['of', 'and', 'the', 'for']);
+            const initials = collegeName.split(/\s+/)
+                .filter(word => word && !skipWords.has(word.toLowerCase()))
+                .map(word => word[0].toUpperCase())
+                .join('');
+            return initials || collegeName.substring(0, 3).toUpperCase();
+        },
+        addNotification(type, title, message) {
+            const id = this.notificationId++;
+            this.notifications.push({ id, type, title, message });
+            setTimeout(() => this.removeNotification(id), 5000); // Auto-dismiss after 5 seconds
+        },
+        removeNotification(id) {
+            this.notifications = this.notifications.filter(n => n.id !== id);
+        },
+        buildExportSections() {
+            const stats = this.dashboardStats || {};
+
+            const statusTotals = { Probational: 0, Contractual: 0, Regular: 0, 'Self-employed': 0, Unemployed: 0 };
+            Object.values(stats.employment_status_per_program || {}).forEach(counts => {
+                Object.keys(statusTotals).forEach(label => {
+                    statusTotals[label] += counts[label] || 0;
+                });
+            });
+
+            const alignmentLabels = ['Highly Aligned', 'Moderately Aligned', 'Slightly Aligned', 'Not Aligned'];
+            const alignmentTotals = {};
+            alignmentLabels.forEach(label => {
+                alignmentTotals[label] = Object.values(stats.course_work_alignment || {}).reduce((sum, course) => {
+                    return sum + ((course.counts && typeof course.counts[label] === 'number') ? course.counts[label] : 0);
+                }, 0);
+            });
+
+            const graduatesPerCollege = {};
+            Object.entries(stats.graduates_per_college || {}).forEach(([college, counts]) => {
+                graduatesPerCollege[college] = counts.graduates || 0;
+            });
+
+            return {
+                'General Insights': {
+                    'Total Jobs': stats.total_jobs || 0,
+                    'Total Employers': stats.total_companies || 0,
+                    'Total Applications': stats.total_applications || 0,
+                    'Total Alumni': stats.total_alumni || 0,
+                },
+                'Employment Status': statusTotals,
+                'Work Location': stats.work_location_distribution || {},
+                'Employment Sector': stats.employment_sector_distribution || {},
+                'Course-Work Alignment': alignmentTotals,
+                'Graduates per College': graduatesPerCollege,
+            };
+        },
+        exportSectionsToRows(sections) {
+            const rows = [];
+            Object.entries(sections).forEach(([category, values]) => {
+                Object.entries(values).forEach(([label, value]) => {
+                    rows.push({ Category: `${category} - ${label}`, Value: value });
+                });
+            });
+            return rows;
+        },
+        async exportToExcel() {
+            await LibLoader.ensureXLSX();
+            const rows = this.exportSectionsToRows(this.buildExportSections());
+            const workbook = XLSX.utils.book_new();
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+            XLSX.writeFile(workbook, "LSPU_Employment_Insights.xlsx");
+        },
+        async exportToPDF() {
+            await LibLoader.ensureJsPDFAutoTable();
+            if (typeof jspdf === 'undefined' || typeof jspdf.jsPDF === 'undefined') {
+                alert('PDF export is unavailable right now — please try again in a moment.');
+                return;
+            }
+            const { jsPDF } = jspdf;
+            const doc = new jsPDF();
+            const rows = this.exportSectionsToRows(this.buildExportSections())
+                .map(row => [row.Category, row.Value]);
+
+            doc.autoTable({
+                head: [['Category', 'Value']],
+                body: rows
+            });
+            doc.save("LSPU_Employment_Insights.pdf");
+        },
+        showDrilldown(type, label) {
+          this.drilldown.active = true;
+          this.drilldown.type = type;
+          this.drilldown.label = label;
+          let courseData = null;
+          if (type === 'college') {
+            courseData = this.dashboardStats.courses_per_college && this.dashboardStats.courses_per_college[label];
+          } else if (type === 'location') {
+            courseData = this.dashboardStats.courses_per_location && this.dashboardStats.courses_per_location[label];
+          } else if (type === 'sector') {
+            courseData = this.dashboardStats.courses_per_sector && this.dashboardStats.courses_per_sector[label];
+          }
+          if (courseData && Object.keys(courseData).length > 0) {
+            this.drilldown.data = {
+              labels: Object.keys(courseData),
+              graduates: Object.values(courseData).map(c => c.graduates),
+              employed: Object.values(courseData).map(c => c.employed)
+            };
+          } else {
+            this.drilldown.data = {
+              labels: [],
+              graduates: [],
+              employed: []
+            };
+          }
+          this.$nextTick(() => this.renderDrilldownChart());
+        },
+        closeDrilldown() {
+          this.drilldown.active = false;
+          if (this.charts.drilldown) {
+            this.charts.drilldown.destroy();
+            this.charts.drilldown = null;
+          }
+        },
+        renderDrilldownChart() {
+          if (!this.drilldown.active) return;
+          const ctx = document.getElementById('drilldownChart');
+          if (ctx) {
+            if (this.charts.drilldown) this.charts.drilldown.destroy();
+            if (this.drilldown.data) {
+              this.charts.drilldown = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                  labels: this.drilldown.data.labels,
+                  datasets: [
+                    {
+                      label: 'Graduates',
+                      data: this.drilldown.data.graduates,
+                      backgroundColor: 'rgba(54, 162, 235, 0.7)'
+                    },
+                    {
+                      label: 'Employed',
+                      data: this.drilldown.data.employed,
+                      backgroundColor: 'rgba(75, 192, 192, 0.7)'
+                    }
+                  ]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: { legend: { labels: { color: '#374151' } } }
+                }
+              });
+            }
+          }
+        }
+    }
+}).mount('#app');

@@ -1,0 +1,34 @@
+[v-cloak] { 
+    display: none !important; 
+}
+
+.slide-enter-active {
+    transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+}
+  
+.slide-leave-active {
+    transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+  
+.slide-enter-from, .slide-leave-to {
+    transform: translateY(-32px);
+    opacity: 0;
+}
+  
+.slide-enter-to, .slide-leave-from {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+button:disabled {
+    cursor: not-allowed;
+}

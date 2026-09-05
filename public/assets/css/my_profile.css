@@ -1,0 +1,27 @@
+[v-cloak] { 
+    display: none !important; 
+}
+      
+.animate-slide-in { 
+    animation: slide-in-right 0.3s cubic-bezier(0.4,0,0.2,1); 
+}
+      
+@keyframes slide-in-right { 
+    0% { 
+        transform: translateX(80px); opacity: 0; 
+    } 
+    100% { 
+        transform: translateX(0); opacity: 1; 
+    } 
+}
+
+/* Add to your CSS */
+.truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.max-w-xs {
+    max-width: 20rem;
+}

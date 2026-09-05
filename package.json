@@ -1,0 +1,29 @@
+{
+    "name": "lspu-eis-vendor",
+    "private": true,
+    "description": "Local vendoring for self-hosted frontend libraries (no bundler/build step for JS; Tailwind CLI used once to precompile CSS). Ported from the original lspu_eis project — see README.",
+    "scripts": {
+        "build:css": "tailwindcss -i ./public/assets/css/tailwind-src.css -o ./public/assets/vendor/tailwind/tailwind.css --minify",
+        "test": "vitest run",
+        "lint": "eslint public/assets/js tests/js"
+    },
+    "devDependencies": {
+        "@fortawesome/fontawesome-free": "6.5.0",
+        "bootstrap": "5.3.0",
+        "bootstrap-icons": "1.11.1",
+        "chart.js": "3.9.1",
+        "eslint": "^10.9.1",
+        "exceljs": "4.3.0",
+        "file-saver": "2.0.5",
+        "globals": "^17.11.0",
+        "html2canvas": "^1.4.1",
+        "jspdf": "2.5.1",
+        "jspdf-autotable": "3.7.0",
+        "leaflet": "1.9.4",
+        "quill": "1.3.7",
+        "tailwindcss": "^3.4.17",
+        "vitest": "^4.1.11",
+        "vue": "3.2.47",
+        "xlsx": "0.18.5"
+    }
+}

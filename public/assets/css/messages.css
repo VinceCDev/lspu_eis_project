@@ -1,0 +1,78 @@
+[v-cloak] { 
+    display: none !important; 
+}
+
+html, body, #app { height: 100%; }
+        .scrollbar-thin::-webkit-scrollbar { width: 8px; background: #f1f5f9; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+        .compose-float { position: fixed; bottom: 32px; right: 32px; z-index: 50; }
+        .compose-modal { min-width: 350px; max-width: 420px; }
+        @media (max-width: 900px) { .compose-float { right: 8px; bottom: 8px; } }
+        @media (max-width: 768px) { .compose-modal { min-width: 90vw; max-width: 98vw; } }
+        @media print {
+            .print-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-family: Arial, sans-serif;
+                font-size: 12px;
+                margin-bottom: 20px;
+            }
+            
+            .print-table th {
+                background-color: #1a73e8;
+                color: white;
+                padding: 8px;
+                text-align: left;
+                border: 1px solid #ddd;
+            }
+            
+            .print-table td {
+                padding: 8px;
+                border: 1px solid #ddd;
+                vertical-align: top;
+            }
+            
+            .print-table tr.even {
+                background-color: #f9f9f9;
+            }
+            
+            .print-table tr.unread {
+                background-color: #f0f7ff;
+            }
+            
+            .sender-col { width: 20%; }
+            .subject-col { width: 25%; }
+            .message-col { width: 40%; }
+            .time-col { width: 15%; }
+            
+            .no-messages {
+                text-align: center;
+                padding: 40px;
+                font-size: 16px;
+                color: #666;
+            }
+            
+            .no-messages i {
+                font-size: 48px;
+                color: #ccc;
+                margin-bottom: 15px;
+                display: block;
+            }
+            
+            .print-footer {
+                margin-top: 30px;
+                font-size: 10px;
+                color: #999;
+                display: flex;
+                justify-content: space-between;
+            }
+            
+            .print-watermark {
+                opacity: 0.5;
+            }
+            
+            @page {
+                size: auto;
+                margin: 15mm;
+            }
+        }

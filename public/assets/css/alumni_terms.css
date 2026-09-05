@@ -1,0 +1,45 @@
+[v-cloak] { display: none; }
+/* Remove container constraints for full-width content */
+.terms-content {
+    max-width: none;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+@media (min-width: 768px) {
+    .terms-content {
+        padding-left: 2rem;
+        padding-right: 2rem;
+    }
+}
+@media (min-width: 1024px) {
+    .terms-content {
+        padding-left: 4rem;
+        padding-right: 4rem;
+    }
+}
+
+/* Animation for dark mode toggle */
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.rotate-animation {
+    animation: rotate 1s ease;
+}
+
+/* Dark mode styles */
+.dark .dark\:bg-gray-900 {
+    background-color: #111827;
+}
+.dark .dark\:text-white {
+    color: #fff;
+}
+.dark .dark\:text-gray-300 {
+    color: #D1D5DB;
+}
+.dark .dark\:border-gray-700 {
+    border-color: #374151;
+}
+.dark .dark\:bg-gray-800 {
+    background-color: #1F2937;
+}
