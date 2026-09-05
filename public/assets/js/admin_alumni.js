@@ -499,7 +499,7 @@ createApp({
                     if (alumni.resume && alumni.resume.file_name) {
                         resume = {
                             ...alumni.resume,
-                            url: 'uploads/resume/' + alumni.resume.file_name
+                            url: 'uploads/resumes/' + alumni.resume.file_name
                         };
                     }
 
