@@ -30,7 +30,13 @@ class EnsureRole
                 return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
             }
 
-            return redirect('/login');
+            // Was: redirect('/login') — confusing for a user who IS logged
+            // in (ISO 25010 remediation: silently bouncing an authenticated
+            // user back to the login form with no explanation looked like a
+            // login/session bug rather than a permissions one). They remain
+            // just as blocked from the page either way; only the message
+            // changes.
+            return response()->view('errors.403', [], 403);
         }
 
         return $next($request);

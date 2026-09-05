@@ -36,6 +36,6 @@ class LegacyDispatcher
             abort(404);
         }
 
-        return app()->call([new $controllerClass(), $method], ['request' => $request]);
+        return app()->call([app()->make($controllerClass), $method], ['request' => $request]);
     }
 }

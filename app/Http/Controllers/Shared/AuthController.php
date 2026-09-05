@@ -23,6 +23,13 @@ use Illuminate\Support\Facades\Session;
  */
 class AuthController extends Controller
 {
+    private MailService $mailService;
+
+    public function __construct(MailService $mailService)
+    {
+        $this->mailService = $mailService;
+    }
+
     public function loginPage()
     {
         return view('auth.login', ['csrfToken' => \App\Core\Auth::csrfToken()]);
@@ -72,11 +79,11 @@ class AuthController extends Controller
             }
             $rateLimiter->hit('2fa_send', (string) $user['user_id']);
 
-            $code = sprintf('%06d', mt_rand(0, 999999));
+            $code = sprintf('%06d', random_int(0, 999999));
             $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
             $userModel->setTwoFactorCode($user['user_id'], $code, $expires);
 
-            $sent = (new MailService())->send(
+            $sent = $this->mailService->send(
                 $user['email'],
                 $user['email'],
                 'Your LSPU Security Verification Code',
@@ -205,7 +212,7 @@ class AuthController extends Controller
             $userModel->setResetToken($user['user_id'], $token, $expiry);
 
             $resetLink = config('app.url').'/reset_password?token='.urlencode($token).'&email='.urlencode($user['email']);
-            (new MailService())->send(
+            $this->mailService->send(
                 $user['email'],
                 $user['email'],
                 'Reset Your LSPU EIS Password',
@@ -263,7 +270,7 @@ class AuthController extends Controller
 
         (new Notification())->create($user['user_id'], 'password', 'Your password was changed.', 'If you did not perform this action, please contact support.');
 
-        (new MailService())->send(
+        $this->mailService->send(
             $email,
             $email,
             'Your LSPU EIS Password Was Reset',

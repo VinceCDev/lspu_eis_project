@@ -79,11 +79,19 @@ class AuthOriginCheckTest extends TestCase
         $this->assertTrue($this->isCrossOriginPost($server, self::APP_URL));
     }
 
-    public function testNeitherHeaderPresentIsAllowed(): void
+    /**
+     * A real browser sends Origin (virtually all modern POSTs) or at least
+     * Referer on a same-origin POST. A request with neither is either a
+     * non-browser client or a browser stripping both, and this app has no
+     * legitimate non-browser POST caller — so this is now a default-deny
+     * (ISO 25010 remediation: was fail-open, see RejectCrossOriginPost's
+     * docblock).
+     */
+    public function testNeitherHeaderPresentIsRejected(): void
     {
         $server = ['REQUEST_METHOD' => 'POST'];
 
-        $this->assertFalse($this->isCrossOriginPost($server, self::APP_URL));
+        $this->assertTrue($this->isCrossOriginPost($server, self::APP_URL));
     }
 
     public function testDisabledWhenAppUrlIsNotConfigured(): void

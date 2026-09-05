@@ -709,42 +709,6 @@ createApp({
             });
         },
         
-        exportToPDFFile(data, fileName) {
-            return new Promise((resolve) => {
-                // Create new PDF document
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF();
-                
-                // Add title
-                doc.setFontSize(16);
-                doc.text('Onboarding Management Report', 14, 15);
-                doc.setFontSize(10);
-                doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
-                
-                // Add table
-                doc.autoTable({
-                    startY: 30,
-                    head: [Object.keys(data[0])],
-                    body: data.map(item => Object.values(item)),
-                    theme: 'grid',
-                    styles: { fontSize: 8 },
-                    headStyles: { fillColor: [41, 128, 185] }
-                });
-                
-                // Add footer
-                const pageCount = doc.internal.getNumberOfPages();
-                for (let i = 1; i <= pageCount; i++) {
-                    doc.setPage(i);
-                    doc.setFontSize(8);
-                    doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width / 2, 
-                            doc.internal.pageSize.height - 10, { align: 'center' });
-                }
-                
-                // Save PDF
-                doc.save(`${fileName}.pdf`);
-                resolve();
-            });
-        },
         async exportToPDFFile(data, fileName) {
             await LibLoader.ensureJsPDFAutoTable();
             return new Promise((resolve) => {

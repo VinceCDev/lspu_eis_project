@@ -25,6 +25,20 @@ createApp({
             notifications: [],
             notificationId: 0,
             dashboardStats: null,
+            // KNOWN INCOMPLETE FEATURE (confirmed during ISO 25010
+            // remediation, item 12): showDrilldown()/closeDrilldown()/
+            // renderDrilldownChart() below are fully implemented and wired
+            // to the college/location/sector chart onClick handlers, but
+            // admin/dashboard.blade.php has no modal/panel bound to
+            // `drilldown.active` and no `#drilldownChart` canvas — clicking
+            // a chart segment computes drilldown.data and silently does
+            // nothing visible (renderDrilldownChart() guards on the canvas
+            // existing, so this doesn't throw, it just has no UI yet).
+            // Needs a template addition (modal with a canvas#drilldownChart
+            // and a close button calling closeDrilldown()) — left as-is
+            // rather than removed since it's clearly intended, not
+            // abandoned, but building that UI is out of scope for this
+            // remediation pass (see the separate frontend/UI testing phase).
             drilldown: {
               active: false,
               type: '', // 'college', 'location', 'sector'

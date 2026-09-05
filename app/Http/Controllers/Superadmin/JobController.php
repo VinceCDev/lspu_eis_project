@@ -37,8 +37,8 @@ class JobController extends Controller
      */
     public function paginatedList(Request $request): JsonResponse
     {
-        $page = max(1, (int) $request->query('page', 1));
-        $perPage = min(100, max(1, (int) $request->query('per_page', 25)));
+        $page = max(1, (int) $request->query('page', '1'));
+        $perPage = min(100, max(1, (int) $request->query('per_page', '25')));
         $search = trim((string) $request->query('search', ''));
         $offset = ($page - 1) * $perPage;
 

@@ -14,8 +14,16 @@ use Symfony\Component\HttpFoundation\Response;
  * POST from the untouched frontend. Origin/Referer checking gives the same
  * protection with zero frontend changes: both headers are sent by every
  * modern browser on a same-origin POST, and a cross-site page forging a
- * request here can't fake either one to this app's own origin. Only
- * rejects when a header IS present and mismatches.
+ * request here can't fake either one to this app's own origin.
+ *
+ * Rejects when a header IS present and mismatches, AND when both are
+ * absent — a real browser sends at least one of these on every POST (Origin
+ * on virtually all modern POSTs; Referer as a fallback even when a privacy
+ * setting suppresses Origin), so a request with neither is either a
+ * non-browser client or a browser stripping both. This app has no
+ * legitimate non-browser POST caller (the one unauthenticated automation
+ * endpoint, api_reminder, is GET-only with its own shared-secret check), so
+ * default-deny here rather than fail open.
  */
 class RejectCrossOriginPost
 {
@@ -62,6 +70,7 @@ class RejectCrossOriginPost
             return !str_starts_with($referer, $expected.'/') && rtrim($referer, '/') !== $expected;
         }
 
-        return false;
+        // Neither header present — default-deny (see class docblock).
+        return true;
     }
 }
