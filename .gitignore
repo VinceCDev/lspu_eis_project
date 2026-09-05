@@ -34,9 +34,15 @@
 /vendor
 
 # User-uploaded content (not source code) — never committed, regenerated
-# on disk per-category by App\Core\Uploader on first upload.
-/uploads/*
-!/uploads/.gitkeep
+# on disk per-category by App\Core\Uploader on first upload. Lives directly
+# under public/uploads (see App\Core\Uploader::basePath()) — no separate
+# project-root uploads/ or symlink between them; `ln -s` on Windows without
+# an elevated privilege silently falls back to a one-time directory copy
+# instead of erroring, which is exactly the kind of failure a symlink-based
+# setup here would hide.
+/public/uploads/*
+!/public/uploads/.htaccess
+!/public/uploads/.gitkeep
 
 Homestead.json
 Homestead.yaml

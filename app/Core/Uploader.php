@@ -15,12 +15,24 @@ class Uploader
 {
     /**
      * Resolves a path inside the uploads tree. Configurable via UPLOADS_PATH
-     * (see config/filesystems.php); defaults to base_path('uploads') so
-     * behavior is unchanged for any environment that doesn't set it.
+     * (see config/filesystems.php); defaults to public_path('uploads') —
+     * the web-served location directly, with NO symlink in between.
+     *
+     * This used to default to base_path('uploads') with public/uploads as a
+     * separate symlink pointing at it. That silently broke: creating a
+     * symlink via `ln -s` requires an elevated privilege on Windows
+     * (SeCreateSymbolicLinkPrivilege) that a normal Git Bash session
+     * doesn't have, and without it `ln -s` doesn't error — it silently
+     * falls back to a one-time directory COPY instead of a live link. Every
+     * upload after that copy was made kept writing to base_path('uploads')
+     * correctly, but the web-facing "symlink" was actually a frozen
+     * snapshot, so newly uploaded files 404'd on their public URL despite
+     * existing on disk. Removing the indirection entirely removes the
+     * failure mode: there is now exactly one physical uploads directory.
      */
     public static function basePath(string $relative = ''): string
     {
-        $root = rtrim(config('filesystems.uploads_path') ?: base_path('uploads'), '/\\');
+        $root = rtrim(config('filesystems.uploads_path') ?: public_path('uploads'), '/\\');
 
         return $relative === '' ? $root : $root.'/'.ltrim($relative, '/\\');
     }
