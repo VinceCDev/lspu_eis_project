@@ -5,10 +5,13 @@
     "scripts": {
         "build:css": "tailwindcss -i ./public/assets/css/tailwind-src.css -o ./public/assets/vendor/tailwind/tailwind.css --minify",
         "test": "vitest run",
-        "lint": "eslint public/assets/js tests/js"
+        "lint": "eslint public/assets/js tests/js",
+        "test:browser": "playwright test"
     },
     "devDependencies": {
+        "@axe-core/playwright": "^4.13.0",
         "@fortawesome/fontawesome-free": "6.5.0",
+        "@playwright/test": "^1.63.0",
         "bootstrap": "5.3.0",
         "bootstrap-icons": "1.11.1",
         "chart.js": "3.9.1",

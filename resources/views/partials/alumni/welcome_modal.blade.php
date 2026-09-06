@@ -5,8 +5,8 @@
                 <h2 class="text-2xl font-bold flex items-center">
                     <i class="fas fa-graduation-cap mr-3"></i> Welcome to LSPU Alumni Portal!
                 </h2>
-                <button @click="closeWelcomeModal" class="text-white hover:text-blue-200 text-xl">
-                    <i class="fas fa-times"></i>
+                <button @click="closeWelcomeModal" aria-label="Close" class="text-white hover:text-blue-200 text-xl">
+                    <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
             </div>
             

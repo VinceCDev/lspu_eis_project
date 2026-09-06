@@ -44,6 +44,13 @@
 !/public/uploads/.htaccess
 !/public/uploads/.gitkeep
 
+# Playwright generated output (reports/traces/screenshots/videos from test
+# runs) — regenerated on every run, not source.
+/playwright-report
+/test-results
+/tests/Browser/screenshots
+/tests/Browser/fixtures/files/not-an-image.txt
+
 Homestead.json
 Homestead.yaml
 Thumbs.db

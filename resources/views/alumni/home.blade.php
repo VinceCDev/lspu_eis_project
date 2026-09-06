@@ -46,8 +46,8 @@
         <transition enter-active-class="modal-enter-active" enter-from-class="modal-enter-from" enter-to-class="modal-enter-to" leave-active-class="modal-leave-active" leave-from-class="modal-leave-from" leave-to-class="modal-leave-to">
             <div v-if="showApplicationModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black bg-opacity-50" role="dialog" aria-modal="true">
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-2xl mx-2 p-6 relative max-h-[90vh] overflow-y-auto">
-                    <button class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" @click="closeApplicationModal">
-                        <i class="fas fa-times"></i>
+                    <button class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" @click="closeApplicationModal" aria-label="Close">
+                        <i class="fas fa-times" aria-hidden="true"></i>
                     </button>
                     <!-- Stepper -->
                     <div class="flex justify-center mb-6 gap-4">
@@ -206,7 +206,8 @@
                                 placeholder="Search for jobs..."
                                 v-model="searchQuery">
                             <div class="absolute inset-y-0 right-0 flex items-center pr-3">
-                                <button class="p-1 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
+                                <button v-if="searchQuery" @click="searchQuery = ''" aria-label="Clear search" class="p-1 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
+                                    <i class="fas fa-times" aria-hidden="true"></i>
                                 </button>
                             </div>
                         </div>
@@ -221,8 +222,8 @@
                                 class="w-full pl-4 pr-10 py-3 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-lspu-blue focus:border-lspu-blue dark:focus:ring-blue-300 dark:focus:border-blue-300 bg-white dark:bg-gray-700 dark:text-white transition-all duration-200 shadow-sm"
                                 placeholder="Enter location (e.g., Manila, Nueva Ecija)"
                                 aria-label="Search for location">
-                            <button v-if="locationQuery" @click="clearLocation" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                                <i class="fas fa-times"></i>
+                            <button v-if="locationQuery" @click="clearLocation" aria-label="Clear location" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                <i class="fas fa-times" aria-hidden="true"></i>
                             </button>
                         </div>
                         <div v-if="showLocationDropdown && (locationSuggestions.length || defaultLocations.length)"
@@ -319,7 +320,7 @@
                                 >
                                     <div>
                                         <h3 class="font-bold text-lg text-blue-700 dark:text-blue-300 group-hover:underline">{{ job.title }}</h3>
-                                        <p class="text-sm text-blue-500 dark:text-blue-200 font-semibold">{{ job.company }}</p>
+                                        <p class="text-sm text-blue-700 dark:text-blue-200 font-semibold">{{ job.company }}</p>
                                     </div>
                                 </div>
                                 <i class="fas fa-bookmark text-gray-400 hover:text-red-500 dark:hover:text-red-400" :class="{ 'text-red-500 dark:text-red-400': job.saved }" @click.stop="toggleSave(job)"></i>
@@ -351,23 +352,25 @@
                 <!-- Pagination Controls -->
                 <div v-if="filteredJobs.length > 0" class="flex justify-center items-center space-x-2 mt-8 mb-4">
                     <!-- First Page (<<) -->
-                    <button 
-                        @click="goToPage(1)" 
+                    <button
+                        @click="goToPage(1)"
                         :disabled="currentPage === 1"
-                        :class="['w-10 h-10 flex items-center justify-center rounded-lg transition-colors', 
-                                currentPage === 1 ? 'text-gray-400 cursor-not-allowed' : 
+                        aria-label="First page"
+                        :class="['w-10 h-10 flex items-center justify-center rounded-lg transition-colors',
+                                currentPage === 1 ? 'text-gray-400 cursor-not-allowed' :
                                 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-300']">
-                        <i class="fas fa-angles-left"></i>
+                        <i class="fas fa-angles-left" aria-hidden="true"></i>
                     </button>
-                    
+
                     <!-- Previous Page (<) -->
-                    <button 
-                        @click="prevPage" 
+                    <button
+                        @click="prevPage"
                         :disabled="currentPage === 1"
-                        :class="['w-10 h-10 flex items-center justify-center rounded-lg transition-colors', 
-                                currentPage === 1 ? 'text-gray-400 cursor-not-allowed' : 
+                        aria-label="Previous page"
+                        :class="['w-10 h-10 flex items-center justify-center rounded-lg transition-colors',
+                                currentPage === 1 ? 'text-gray-400 cursor-not-allowed' :
                                 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-300']">
-                        <i class="fas fa-chevron-left"></i>
+                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
                     </button>
                     
                     <!-- Page Numbers -->
@@ -385,23 +388,25 @@
                     </div>
                     
                     <!-- Next Page (>) -->
-                    <button 
-                        @click="nextPage" 
+                    <button
+                        @click="nextPage"
                         :disabled="currentPage === totalPages"
-                        :class="['w-10 h-10 flex items-center justify-center rounded-lg transition-colors', 
-                                currentPage === totalPages ? 'text-gray-400 cursor-not-allowed' : 
+                        aria-label="Next page"
+                        :class="['w-10 h-10 flex items-center justify-center rounded-lg transition-colors',
+                                currentPage === totalPages ? 'text-gray-400 cursor-not-allowed' :
                                 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-300']">
-                        <i class="fas fa-chevron-right"></i>
+                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
                     </button>
-                    
+
                     <!-- Last Page (>>) -->
-                    <button 
-                        @click="goToPage(totalPages)" 
+                    <button
+                        @click="goToPage(totalPages)"
                         :disabled="currentPage === totalPages"
-                        :class="['w-10 h-10 flex items-center justify-center rounded-lg transition-colors', 
-                                currentPage === totalPages ? 'text-gray-400 cursor-not-allowed' : 
+                        aria-label="Last page"
+                        :class="['w-10 h-10 flex items-center justify-center rounded-lg transition-colors',
+                                currentPage === totalPages ? 'text-gray-400 cursor-not-allowed' :
                                 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-300']">
-                        <i class="fas fa-angles-right"></i>
+                        <i class="fas fa-angles-right" aria-hidden="true"></i>
                     </button>
                 </div>
 
@@ -417,8 +422,8 @@
         <div :class="['fixed inset-0 z-40 transition-opacity duration-200', showDetails ? 'bg-black bg-opacity-50' : 'pointer-events-none opacity-0']" @click="hideJobDetails" id="overlay"></div>
         <div :class="['fixed top-0 right-0 h-full w-full max-w-[600px] z-50 transform transition-transform duration-500 overflow-y-auto', showDetails ? 'translate-x-0' : 'translate-x-full', 'backdrop-blur', darkMode ? 'bg-gray-900 bg-opacity-90' : 'bg-white bg-opacity-85']" id="jobDetailsSidebar">
             <div class="relative p-6 min-h-full flex flex-col">
-                <button class="absolute top-4 right-4 text-gray-500 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 text-2xl z-10" @click="hideJobDetails">
-                    <i class="fas fa-times"></i>
+                <button class="absolute top-4 right-4 text-gray-500 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 text-2xl z-10" @click="hideJobDetails" aria-label="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
                 <div class="flex justify-between items-start mb-6">
                     <div class="flex items-center">

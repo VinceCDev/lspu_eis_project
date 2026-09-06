@@ -13,7 +13,7 @@
     <div class="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-6 relative overflow-hidden transition-transform hover:-translate-y-1 hover:shadow-md">
         <div class="text-gray-600 dark:text-gray-300 font-semibold mb-4">Jobs</div>
         <div class="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">{{ dashboardStats && dashboardStats.total_jobs ? dashboardStats.total_jobs : 0 }}</div>
-        <div class="text-sm text-green-500">
+        <div class="text-sm text-green-700 dark:text-green-400">
             <i class="fas fa-arrow-up mr-1"></i>
             {{ dashboardStats && dashboardStats.jobs_yesterday ? dashboardStats.jobs_yesterday + ' from yesterday' : '0 from yesterday' }}
         </div>
@@ -22,7 +22,7 @@
     <div class="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-6 relative overflow-hidden transition-transform hover:-translate-y-1 hover:shadow-md">
         <div class="text-gray-600 dark:text-gray-300 font-semibold mb-4">Applications</div>
         <div class="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">{{ dashboardStats && dashboardStats.total_applications ? dashboardStats.total_applications : 0 }}</div>
-        <div class="text-sm text-green-500">
+        <div class="text-sm text-green-700 dark:text-green-400">
             <i class="fas fa-arrow-up mr-1"></i>
             {{ dashboardStats && dashboardStats.applications_yesterday ? dashboardStats.applications_yesterday + ' from yesterday' : '0 from yesterday' }}
         </div>
@@ -31,7 +31,7 @@
     <div class="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-6 relative overflow-hidden transition-transform hover:-translate-y-1 hover:shadow-md">
         <div class="text-gray-600 dark:text-gray-300 font-semibold mb-4">Companies</div>
         <div class="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">{{ dashboardStats && dashboardStats.total_companies ? dashboardStats.total_companies : 0 }}</div>
-        <div class="text-sm text-green-500">
+        <div class="text-sm text-green-700 dark:text-green-400">
             <i class="fas fa-arrow-up mr-1"></i>
             {{ dashboardStats && dashboardStats.companies_yesterday ? dashboardStats.companies_yesterday + ' from yesterday' : '0 from yesterday' }}
         </div>
@@ -40,7 +40,7 @@
     <div class="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-6 relative overflow-hidden transition-transform hover:-translate-y-1 hover:shadow-md">
         <div class="text-gray-600 dark:text-gray-300 font-semibold mb-4">Alumni</div>
         <div class="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">{{ dashboardStats && dashboardStats.total_alumni ? dashboardStats.total_alumni : 0 }}</div>
-        <div class="text-sm text-green-500">
+        <div class="text-sm text-green-700 dark:text-green-400">
             <i class="fas fa-arrow-up mr-1"></i>
             {{ dashboardStats && dashboardStats.alumni_yesterday ? dashboardStats.alumni_yesterday + ' from yesterday' : '0 from yesterday' }}
         </div>
@@ -86,7 +86,7 @@
                  (each also opens its own program chart) instead of wasting the space.
                  A superadmin's multi-campus list already fills the space on its own. -->
             <div v-if="!isSuperadmin && employmentStatusByCampus[0] && employmentStatusByCampus[0].colleges && employmentStatusByCampus[0].colleges.length" class="flex-1 mt-4">
-                <p class="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-2">By College</p>
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">By College</p>
                 <div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     <button v-for="college in employmentStatusByCampus[0].colleges" :key="college"
                         @click="openCollegeStatusModal(employmentStatusByCampus[0], college)" :title="college"
