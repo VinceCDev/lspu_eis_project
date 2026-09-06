@@ -274,7 +274,7 @@ class AlumniController extends Controller
             'first_name' => $data['first_name'],
             'middle_name' => $data['middle_name'] ?? '',
             'last_name' => $data['last_name'],
-            'birthdate' => $data['birthdate'] ?? '0000-00-00',
+            'birthdate' => empty($data['birthdate']) ? null : $data['birthdate'],
             'contact' => $data['contact'] ?? '',
             'gender' => $data['gender'],
             'civil_status' => $data['civil_status'] ?? '',

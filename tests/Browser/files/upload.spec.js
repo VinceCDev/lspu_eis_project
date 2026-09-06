@@ -28,7 +28,9 @@ test.describe('File upload — real browser', () => {
     await fileInput.setInputFiles(path.join(__dirname, '..', 'fixtures', 'files', 'test-avatar.png'));
 
     // Modal should now show the preview and an enabled Save button
-    const saveButton = page.locator('button:has-text("Save Photo")');
+    // Save button reads "Update Photo" once the account already has a
+    // profile picture, "Save Photo" otherwise.
+    const saveButton = page.locator('button:has-text("Save Photo"), button:has-text("Update Photo")');
     await expect(saveButton).toBeEnabled({ timeout: 5000 });
 
     const [response] = await Promise.all([
@@ -70,7 +72,9 @@ test.describe('File upload — real browser', () => {
     require('fs').writeFileSync(textFilePath, 'this is not an image');
     await fileInput.setInputFiles(textFilePath);
 
-    const saveButton = page.locator('button:has-text("Save Photo")');
+    // Save button reads "Update Photo" once the account already has a
+    // profile picture, "Save Photo" otherwise.
+    const saveButton = page.locator('button:has-text("Save Photo"), button:has-text("Update Photo")');
     if (await saveButton.isEnabled().catch(() => false)) {
       const [response] = await Promise.all([
         page.waitForResponse((res) => res.url().includes('ProfilePic')),

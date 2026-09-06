@@ -53,7 +53,10 @@ test.describe('D6 — Photo edit trigger accessibility', () => {
     const fileInput = page.locator('input[type="file"][accept="image/*"]');
     await fileInput.setInputFiles(require('path').join(__dirname, '..', 'fixtures', 'files', 'test-avatar.png'));
 
-    const saveButton = page.locator('button:has-text("Save Photo")');
+    // Save button reads "Update Photo" once the account already has a
+    // profile picture, "Save Photo" otherwise (button relabeling from a
+    // later remediation pass) — match either.
+    const saveButton = page.locator('button:has-text("Save Photo"), button:has-text("Update Photo")');
     await expect(saveButton).toBeEnabled({ timeout: 5000 });
     const [response] = await Promise.all([
       page.waitForResponse((res) => res.url().includes('ProfilePic')),

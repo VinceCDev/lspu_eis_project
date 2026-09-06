@@ -10,11 +10,24 @@ class Account
 {
     use LegacyQueries;
 
+    /**
+     * user.status is the column login and every account list actually read
+     * (Account::allAccounts() selects u.status, not a.status) — it must
+     * always be updated, or a "deactivated" admin keeps full login access
+     * and the account list keeps showing them as Active. administrator.status
+     * is a second, separate column an admin's own profile page reads
+     * (adminDetailsByUserId()); kept in sync here too so that view doesn't
+     * fall out of step with the real, enforced status on user.
+     */
     public function setStatus(int $userId, string $role, string $status): bool
     {
-        $table = $role === 'admin' ? 'administrator' : 'user';
+        $ok = $this->runUpdate('UPDATE user SET status = ? WHERE user_id = ?', [$status, $userId]) >= 0;
 
-        return $this->runUpdate("UPDATE {$table} SET status = ? WHERE user_id = ?", [$status, $userId]) >= 0;
+        if ($role === 'admin') {
+            $ok = $this->runUpdate('UPDATE administrator SET status = ? WHERE user_id = ?', [$status, $userId]) >= 0 && $ok;
+        }
+
+        return $ok;
     }
 
     /** Employers aren't campus-scoped and are managed at the superadmin level only. */

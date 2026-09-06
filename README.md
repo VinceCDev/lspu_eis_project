@@ -17,9 +17,12 @@ A Laravel 12 port of LSPU's Employment Information System (EIS): a job-matching 
 - [Testing](#testing)
 - [Deployment](#deployment)
 - [Security](#security)
+- [ISO/IEC 25010 quality characteristics](#isoiec-25010-quality-characteristics)
 - [Scheduled / maintenance jobs](#scheduled--maintenance-jobs)
+- [CI/CD](#cicd)
 - [Project structure](#project-structure)
 - [Known limitations](#known-limitations)
+- [Guide for the next developer](#guide-for-the-next-developer)
 
 ## About the project
 
@@ -27,8 +30,8 @@ LSPU EIS helps Laguna State Polytechnic University track its alumni's employment
 
 - **Alumni**: profile & resume management, job search/filtering (with map-based location search), applying to jobs (multi-step wizard: personal info, education, skills, experience, resume, cover letter, employer-defined questions), tracking application status, messaging employers, notifications, success stories.
 - **Employer**: company profile & verification, job postings (with per-job custom "Employer Questions"), applicant review/status pipeline, interview scheduling, an AI-assisted "Matchboard" that ranks alumni against a job posting, onboarding checklists for hired applicants, messaging.
-- **Admin**: manage alumni/employer accounts (approve, edit, deactivate), review pending employer verification documents, view applicants across the platform, dashboards.
-- **Superadmin**: everything Admin can do, plus managing companies and jobs platform-wide, and admin/superadmin account management.
+- **Admin**: manage alumni accounts (view/edit/delete) and pending employer verification, review/delete applications platform-wide, generate/export/email employment reports, admin/alumni account creation, own-profile/settings management, scoped to their own campus.
+- **Superadmin**: everything Admin can do but campus-unscoped, plus employer/company management (view/edit/delete/approve), job postings platform-wide, admin/employer/alumni account management (the only role that can create or manage Employer accounts), the audit log, reminder settings, success stories, landing-page content editing, and system info.
 
 All four roles share one codebase and one database; access is separated entirely by session role, not by separate applications.
 
@@ -37,9 +40,45 @@ All four roles share one codebase and one database; access is separated entirely
 | Role | Typical entry point | Notes |
 |---|---|---|
 | Alumni | `/login` → `/home` | Self-registers via `/signup`, subject to admin approval workflows |
-| Employer | `/employer_login` → `/employer_dashboard` | Self-registers via `/employer_signup`; company verification document reviewed by Admin |
-| Admin | `/login` → `/admin_dashboard` | Created by a Superadmin |
-| Superadmin | `/login` → `/superadmin_dashboard` | Highest privilege; shares most views/controllers with Admin (see [Architecture](#architecture)) |
+| Employer | `/employer_login` → `/employer_dashboard` | Self-registers via `/employer_signup`; company verification document reviewed by Superadmin |
+| Admin | `/login` → `/admin_dashboard` | Created by a Superadmin; scoped to one campus |
+| Superadmin | `/login` → `/superadmin_dashboard` | Highest privilege, not campus-scoped; shares most views/controllers with Admin (see [Architecture](#architecture)) |
+
+### What each role can actually do
+
+Derived from `routes/web.php`'s page map and each controller — the authoritative source if this drifts out of date.
+
+**Alumni** (`Alumni\*Controller`, pages under `/home`, `/my_application`, `/my_profile`, `/message`, `/notification`, `/alumni_success_stories`)
+- Browse/search/filter job postings (map-based location search via Leaflet + a geocoding proxy)
+- Apply to a job through a multi-step wizard (personal info → education → skills → experience → resume → cover letter → any employer-defined custom questions)
+- Track their own applications and status changes
+- Manage their own profile: personal info, education, skills, work experience, resume, profile photo
+- Message employers directly; receive notifications
+- View alumni success stories
+
+**Employer** (`Employer\*Controller`, pages under `/employer_dashboard`, `/employer_jobposting`, `/employer_applicants`, `/employer_interview`, `/employer_matchboard`, `/employer_onboarding`, `/employer_profile`, `/employer_settings`, `/employer_messages`)
+- Create/edit/delete job postings, each with any number of custom "Employer Questions" applicants must answer
+- Review applicants per job, change an applicant's status through the pipeline (Pending → Interview → Hired/Rejected, etc.)
+- Schedule and track interviews
+- Use the AI-assisted **Matchboard** (`App\Services\JobMatchService` + `GeminiClient`) to have Gemini score every alumnus against a job posting
+- Manage onboarding checklists for hired applicants
+- Manage company profile (logo, verification document, company info) — subject to Superadmin approval before the account is fully active
+- Message alumni; manage account settings
+
+**Admin** (`Admin\*Controller`, pages under `/admin_dashboard`, `/admin_alumni`, `/admin_alumni_pending`, `/admin_applicant`, `/admin_user`, `/admin_reports`, `/admin_profile`, `/admin_settings`, `/admin_message`, `/admin_notification`) — everything below is scoped to the admin's own `campus_id`
+- Alumni account management: view, edit, delete (`AlumniController`); review/approve accounts pending verification (`admin_alumni_pending`)
+- Application/applicant management: view and delete application records platform-wide within their campus (`ApplicantController`)
+- Account management (`admin_user` / `UserController`): create/edit/delete/deactivate/reset-password for Admin and Alumni accounts (**not** Employer — that's Superadmin-only, enforced server-side)
+- Reports (`ReportController`): employment summary/detailed/industry-analysis views, Excel export, and emailing a report to a recipient
+- Own profile and account settings (password, 2FA, notification preferences)
+- **Cannot** manage Employer/company records at all — there is no "Admin employer management" page; that capability exists only under Superadmin (`superadmin_company`)
+
+**Superadmin** (`Superadmin\*Controller` plus every `Admin\*Controller` page, unscoped by campus) — has every Admin capability above across *all* campuses, plus:
+- Company/Employer management (`superadmin_company`, `superadmin_company_pending` / `CompanyController`): view/edit/delete, approve pending employer registrations
+- Job management platform-wide (`superadmin_job` / `Superadmin\JobController`)
+- The only role that can create, edit, or delete Employer accounts (via `admin_user`)
+- Audit log (`superadmin_audit_logs` / `AuditLogController`): searchable, filterable record of `create_account` / `update_account` / `deactivate_account` / `delete_account` / `approve_employer` / `delete_employer` and similar actions, each logged with the acting user, action, target entity, and a human-readable description
+- Reminder settings (`superadmin_reminder_settings`), success stories management (`superadmin_success_stories`), landing-page content editor (`superadmin_landing_editor`), and system info (`superadmin_system_info`)
 
 ## Architecture
 
@@ -109,11 +148,14 @@ A few decisions are intentional and load-bearing — worth understanding before 
 
 4. **Database**
 
-   This app expects the **original LSPU EIS schema** to already exist (users, alumni, employer, jobs, applications, and related tables) — the Laravel `migrations/` directory only contains incremental patches layered on top of that schema, it will not create it from scratch. Import your existing schema/data dump into the database named in `DB_DATABASE`, then apply the Laravel-side patches:
+   This app expects the **original LSPU EIS schema** to already exist (users, alumni, employer, jobs, applications, and related tables) — the Laravel `migrations/` directory only contains incremental patches layered on top of that schema, it will not create it from scratch. A structure-only baseline (`database/schema.sql` — tables, columns, indexes, foreign keys; **no data**) is included in this repo so a fresh setup doesn't need a real data dump just to get the app running:
 
    ```bash
+   mysql -u root -p your_database_name < database/schema.sql
    php artisan migrate
    ```
+
+   If you're standing up against real/existing data instead, import that dump first (skip `schema.sql`) and go straight to `php artisan migrate`.
 
    Make sure the database/session is running in **strict SQL mode** (`STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE`) — this app's insert code relies on it to catch bad NULL/date values the same way the original app's database did.
 
@@ -212,7 +254,7 @@ There is no framework-specific deployment magic here beyond a standard Laravel a
    php artisan route:cache
    php artisan view:cache
    ```
-3. **Database**: as in local install, the target database must already contain the original EIS schema/data before running `php artisan migrate --force` (which only layers the incremental patches on top).
+3. **Database**: as in local install, the target database needs the base schema before running `php artisan migrate --force` (which only layers the incremental patches on top) — import real production data if you have it, or `database/schema.sql` for a structure-only baseline.
 4. **Uploads**: set `UPLOADS_PATH` to a writable directory **outside** the document root (or at least outside anything served with directory listing enabled), and make sure it's writable by the web server user. Since there's no symlink involved, the web server must be able to read directly from wherever `UPLOADS_PATH` points if uploads need to be publicly reachable by URL — route/serve them accordingly (a dedicated location block, or a controller-served download endpoint) rather than assuming `public/` access.
 5. **`APP_URL` must be exactly right.** `RejectCrossOriginPost` middleware (this app's CSRF replacement — see [Security](#security)) compares every POST's `Origin`/`Referer` against `config('app.url')`; a mismatched scheme/host/port will reject every real form submission and AJAX POST in the app.
 6. **Queue worker**: `QUEUE_CONNECTION=database` by default — run `php artisan queue:work` under a process supervisor (systemd/Supervisor) in production; `composer dev`'s `queue:listen` is dev-only.
@@ -238,6 +280,26 @@ This app underwent a dedicated ISO/IEC 25010-driven security remediation pass. H
 
 If you discover a security vulnerability in this application, please report it privately to the project maintainer rather than opening a public issue.
 
+## ISO/IEC 25010 quality characteristics
+
+This app has gone through several ISO/IEC 25010-driven remediation and validation passes. Rather than a paper checklist, each characteristic below points at concrete, verifiable evidence already in this codebase — code to read, commands to run, or tests to execute.
+
+**Functional Suitability** — every role's core workflow (see [What each role can actually do](#what-each-role-can-actually-do)) is covered by real, running browser tests (`tests/Browser/`), not just unit-level assertions — e.g. `tests/Browser/admin/alumni-management.spec.js` and `tests/Browser/superadmin/user-account-crud.spec.js` exercise full create → view → edit → delete lifecycles against the real UI and a real database, not mocks.
+
+**Performance Efficiency** — paginated list endpoints for large tables (`AlumniController::paginatedList()`, `CompanyController::paginatedList()`, `AuditLogController::list()`) instead of unbounded `SELECT *`; server-side caching tables (`dashboard_stats_cache`, `alignment_cache` for job-matching text, `location_geocode_cache` for the map search) to avoid recomputing or re-querying third-party APIs on every request; the AI job-matching pass (`job:match`) always runs detached via a queued/backgrounded artisan command rather than inline in a web request, since scoring a large roster can take minutes.
+
+**Compatibility** — the Playwright suite runs across three browser engines (Chromium, Firefox, WebKit — see `playwright.config.js`'s `projects`), and `tests/Browser/responsive/viewports.spec.js` checks 5 breakpoints (1920/1366/768/390/412px) for zero horizontal overflow. The CSP (`SecurityHeaders` middleware) explicitly allowlists the third-party origins this app actually integrates with (OpenStreetMap tiles, PSGC address API, EMSI/Lightcast skills API, Universities API) rather than blocking or silently failing against them.
+
+**Usability** — `tests/Browser/accessibility/axe-scan.spec.js` runs an automated axe-core scan (WCAG 2 A/AA) against key pages; `tests/Browser/accessibility/d6-photo-button.spec.js` documents one concrete fix (a clickable `<div>` converted to a real, keyboard-operable `<button>` with an accessible name). Action-menu dropdowns across every management table were fixed to render via Vue 3 `<teleport to="body">` so they always overlay fully instead of clipping inside a scrollable table — see the `.teleported-action-dropdown` pattern used throughout `resources/views/*/*.blade.php`.
+
+**Reliability** — `EnforceSessionTimeout` middleware enforces a hard server-side idle timeout independent of client-side cookie expiry; `php artisan backup:run` provides a pure-PHP (no `exec()`/`mysqldump` dependency) database + uploads backup that works even where shell-out is disabled; the audit log gives every account/company mutation a durable, queryable trail; strict SQL mode is relied on deliberately (not disabled) so bad data fails loudly at the query level instead of silently corrupting state.
+
+**Security** — see the dedicated [Security](#security) section above for the full list (CSP, the `RejectCrossOriginPost` CSRF replacement, RBAC via `EnsureRole`, 2FA, rate limiting, upload validation, RA 10173 data retention). `composer audit` and `npm audit --omit=dev` are both expected to report zero vulnerabilities in production dependencies as a baseline (see [CI/CD](#cicd)).
+
+**Maintainability** — one controller namespace per role (`Admin/`, `Alumni/`, `Employer/`, `Superadmin/`, `Shared/`) keeps role-specific logic from tangling together; `App\Concerns\LegacyQueries` centralizes the raw-SQL access pattern so every Model reads the same way; `phpstan.neon` + `composer analyse` (0 errors is the expected baseline) catches type errors before they reach production; 100+ PHPUnit tests across Unit/Feature/Integration give a regression net for backend changes.
+
+**Portability** — no JS bundler/build step for the app's own runtime code (Vue loads and compiles its templates in-browser), so there's nothing to rebuild when moving between environments beyond `composer install`/`npm install` and `.env` configuration; file uploads are relocatable via a single `UPLOADS_PATH` env var instead of a hardcoded path; the app runs unmodified under XAMPP, `php artisan serve`, or a production PHP-FPM + Nginx/Apache stack (see [Deployment](#deployment)).
+
 ## Scheduled / maintenance jobs
 
 | Command | Purpose |
@@ -247,6 +309,22 @@ If you discover a security vulnerability in this application, please report it p
 | `php artisan job:match {job_id}` | Scores every alumnus against a job posting via Gemini and notifies matches. Launched fire-and-forget by the job-posting controller right after a job is created (scoring a large roster can take minutes — well past a web request's execution budget), so it always runs detached rather than inline. |
 
 Wire these into `routes/console.php`'s scheduler (`Schedule::command(...)`) or your OS's cron/Task Scheduler if you want them running automatically rather than triggered manually/by the app.
+
+## CI/CD
+
+**There is no CI/CD pipeline configured in this repository yet** (no `.github/workflows/`, no other CI config file) — every check described in this README (`composer test`, `composer analyse`, `composer audit`, `npm audit`, the Playwright suite) is currently run manually by whoever is making the change. If you're setting one up, this is what a pipeline for this app needs to run, in the same order used during this project's own validation passes:
+
+1. `composer install` (add `--no-dev --optimize-autoloader` only for a deploy job, not a test job)
+2. `npm install` (needed for Playwright/Vitest tooling and the Tailwind CLI, not for the app's own runtime JS)
+3. `npx playwright install --with-deps` (first run only / cache between runs — downloads browser binaries)
+4. `composer test` — PHPUnit; expected baseline is **all tests passing** (102 as of this pass; grows as coverage grows)
+5. `composer analyse` — PHPStan; expected baseline is **0 errors**
+6. `composer audit` and `npm audit --omit=dev` — expected baseline is **0 vulnerabilities** in production dependencies. (`npm audit` *without* `--omit=dev` currently reports pre-existing vulnerabilities in vendored dev-only frontend libraries — `jspdf`, `quill`, `xlsx`, `exceljs` — used only by test tooling and export features with no server-side trust boundary; track them but don't treat them as a hard CI gate the same way a production-dependency finding would be)
+7. A real MySQL/MariaDB service (strict SQL mode enabled) with the legacy schema pre-loaded, plus `php artisan migrate`, then `php artisan serve &` before the browser suite
+8. `npx playwright test --project=chromium` (Chromium is the fast/primary gate); Firefox and WebKit runs are valuable but slower — consider running Chromium on every push and the full 3-browser matrix on a schedule or before merging to the main branch, rather than on every commit
+9. Publish the Playwright HTML report (`playwright-report/`) as a build artifact so a failure's trace/screenshot/video is inspectable without re-running locally
+
+Two things specific to this app that a pipeline needs to account for, both already handled in `playwright.config.js`: the suite runs **single-worker, not parallel** (`fullyParallel: false`, `workers: 1`) because tests share MySQL rows tagged with timestamps rather than isolated transactions, and the default test timeout is a generous 45s because `php artisan serve` is single-threaded and requests can genuinely queue behind each other under back-to-back navigation — don't "fix" either of these by re-enabling parallelism or shortening the timeout without addressing the underlying data-isolation/single-threaded-server constraints first.
 
 ## Project structure
 
@@ -278,7 +356,22 @@ tests/
 
 ## Known limitations
 
-- **Not a from-scratch schema**: you must have the original LSPU EIS database available to import before this app is usable — Laravel's migrations here don't create the schema.
+- **Not a from-scratch schema via migrations alone**: Laravel's `migrations/` here don't create the schema — but `database/schema.sql` (structure-only, no data) is included so a fresh setup can bootstrap without needing a real data dump; see [Installation](#installation-local-development).
 - **No JS bundler for the app's own frontend**: Vue templates compile in-browser at runtime, which is why the CSP can't be tightened to disallow `unsafe-eval`/`unsafe-inline` without a separate frontend rebuild effort.
 - **`php artisan serve` is single-threaded**: fine for solo local development, but concurrent requests will visibly queue — use PHP-FPM behind a real web server for anything with concurrent users, including multi-worker test runs.
 - **Third-party API dependency**: the Matchboard's AI ranking feature requires a valid `GEMINI_API_KEY` and network access to Google's Gemini API; without it, that specific feature degrades rather than the whole app failing.
+
+## Guide for the next developer
+
+If you're picking this project up cold, read in this order:
+
+1. **[Architecture](#architecture) first, always.** The four bullets there (no Eloquent, `?action=` dispatching, custom session auth, no-build-step Vue) are not incidental — they're why this codebase looks different from a typical Laravel app, and misreading them as "technical debt to clean up" is the single most common way to break something here. Don't introduce Eloquent models for domain tables, don't add RESTful routes alongside the `?action=` ones for existing pages, and don't reach for Laravel's `Auth` facade — follow the existing pattern in the surrounding code.
+2. **Trace one full feature top-to-bottom before changing anything.** Pick a small one — e.g. Admin Alumni delete: `resources/views/admin/alumni.blade.php`'s dropdown → `public/assets/js/admin_alumni.js`'s `deleteAlumni()` → `routes/web.php`'s `admin_alumni` slug → `App\Http\Controllers\Admin\AlumniController::destroy()` → `App\Models\Alumni`. That round trip is the shape of almost everything else in the app.
+3. **Every page has three files, not one**: a Blade view (`resources/views/<role>/<page>.blade.php`, whose `@verbatim` block is a Vue 3 template), a page-specific JS file (`public/assets/js/<page>.js`, a `createApp({...})` call), and a controller (`app/Http/Controllers/<Role>/<Page>Controller.php`). Changing behavior almost always means touching at least two of the three.
+4. **When you find a bug, check for the duplicate-key trap first.** More than once in this codebase's history, a JS object literal defined the same method name twice — JavaScript silently keeps only the *second* definition, so the first one (and anything only it referenced, like a variable or a piece of logic) becomes dead code with no error anywhere. If a function "obviously should be running" but isn't, grep the file for its name before assuming the bug is elsewhere.
+5. **Any DATE/INT column can reject `''` and the literal string `"null"`.** This database runs in strict SQL mode on purpose. When a form doesn't collect a value for a nullable date/numeric column, pass real PHP `null`, not `''` or `'0000-00-00'` — this exact mistake has caused multiple HTTP 500s across this codebase's history (see `AlumniController::create()`'s `birthdate` handling for a fixed example, and the `App\Concerns\LegacyQueries`-based Models generally for the established convention: `''` for "not yet provided" VARCHAR, real `null` for DATE/INT).
+6. **A status/flag living in two places is a bug waiting to happen.** `Account::setStatus()` is a cautionary tale worth reading once: for a while, deactivating an Admin account wrote to `administrator.status` while login and the account list both read `user.status` — the UI kept showing the account as Active, and a "deactivated" admin could still log in, because the write and the read never agreed on which column was authoritative. Before adding a second place to store something that's already tracked somewhere else, check every place that reads it.
+7. **Never trust that a form's `required` fields are actually populated after a re-fetch.** Several edit modals in this app re-fetch a dependent dropdown's options after opening (e.g. Admin Alumni Edit re-fetches City/Municipality options from a live third-party API keyed off the stored Province) — if the freshly fetched option list doesn't contain an exact string match for the previously stored value, the `<select>` silently renders with nothing selected, HTML5 `required` validation blocks the submit, and the user sees no app-level error at all, just a native browser tooltip. If you're adding a form field backed by an async-loaded option list, make sure a stored value that no longer round-trips through that list fails loudly, not silently.
+8. **When you seed test data directly into the database for a Playwright test, clean it up in the same file.** A disposable job/application/account row that isn't deleted when the test finishes doesn't just linger harmlessly — it becomes real data that a *different* test's `.first()`/`.last()` row locator can pick up by accident, especially on any page filtered to the same fixture account. This has broken previously-passing tests before; a test that creates disposable data owns deleting it, in the same file, not as an assumed side effect of some other test's delete flow.
+9. **Run the full check sequence from [CI/CD](#cicd) before considering any change done**, since there isn't a pipeline doing it for you yet: `composer test`, `composer analyse`, `composer audit`, `npm audit --omit=dev`, and at minimum the Chromium Playwright project. If you touch anything role-management-, dropdown-, or modal-related, run the full 3-browser Playwright matrix — those are the areas with the most existing coverage and the most history of subtle regressions.
+10. **Prefer the smallest fix that addresses the actual root cause.** This codebase has a documented history of bugs caused by defensive-but-wrong workarounds (a broken symlink papered over instead of removed, a silently-swallowed exception) outliving the person who wrote them. When you find something wrong, fix where it's actually wrong — don't add a special case somewhere downstream to compensate for it.

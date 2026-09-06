@@ -422,14 +422,16 @@ createApp({
                 } else {
                     this.profilePicData.file_name = '';
                 }
-            });
+            })
+            .catch(error => console.error('Error fetching profile pic:', error));
         fetch('alumni_profile_data?action=details')
             .then(res => res.json())
             .then(data => {
                 if (data.success && data.profile) {
                     this.profile.name = `${data.profile.first_name} ${data.profile.last_name}`;
                 }
-            });
+            })
+            .catch(error => console.error('Error fetching profile details:', error));
         // Fetch personal details to populate profile.name
     },
     beforeUnmount() {

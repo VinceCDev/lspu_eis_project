@@ -39,9 +39,12 @@ test.describe('Employer Profile modals — close-after-success', () => {
     );
     await expect(modal.locator('img[alt="New Logo Preview"]')).toBeVisible();
 
+    // Button reads "Update Photo" once a logo already exists, "Save Photo"
+    // otherwise (button relabeling from a later remediation pass — see
+    // resources/views/employer/profile.blade.php).
     await Promise.all([
       page.waitForResponse((res) => res.url().includes('updateLogo')),
-      modal.locator('button:has-text("Update Logo")').click(),
+      modal.locator('button:has-text("Update Photo"), button:has-text("Save Photo")').click(),
     ]);
 
     await expect(modal).not.toBeVisible({ timeout: 5000 });

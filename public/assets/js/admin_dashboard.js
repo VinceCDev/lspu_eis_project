@@ -69,7 +69,8 @@ createApp({
                     this.initMap();
                     this.showLogoutModal = false; // Ensure modal is hidden on load
                 }, 100);
-            });
+            })
+            .catch(error => console.error('Error fetching dashboard stats:', error));
         // Fetched separately — it's the one chart backed by a live Gemini
         // call, so it shouldn't hold up everything else on the page when
         // that call is slow (or failing, e.g. an exhausted API quota).
@@ -89,7 +90,8 @@ createApp({
                 if (data.success && data.profile) {
                     this.profile = data.profile;
                 }
-            });
+            })
+            .catch(error => console.error('Error fetching admin profile:', error));
         // Loaded independently (and separately from the slower `stats` call
         // above) so the campus list is ready to click as soon as possible.
         this.fetchEmploymentStatusByCampus();
