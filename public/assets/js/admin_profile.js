@@ -39,6 +39,7 @@ const { createApp } = Vue;
                 showPhotoModal: false,
                 newPhotoPreview: null,
                 newPhotoFile: null,
+                showDeletePhotoModal: false,
                 showDeleteModal: false,
                 experienceToDelete: null
             }
@@ -289,6 +290,26 @@ const { createApp } = Vue;
                 this.showPhotoModal = false;
                 this.newPhotoPreview = null;
                 this.newPhotoFile = null;
+            },
+            confirmDeletePhoto() {
+                this.showDeletePhotoModal = true;
+            },
+            deletePhoto() {
+                fetch('/admin_profile?action=deletePhoto', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        this.showNotification('Profile photo deleted!', 'success');
+                        this.showDeletePhotoModal = false;
+                        this.closePhotoModal();
+                        this.profile.profile_pic = null;
+                    } else {
+                        this.showNotification(data.message || 'Failed to delete photo.', 'error');
+                    }
+                })
+                .catch(() => {
+                    this.showNotification('Failed to delete photo.', 'error');
+                });
             }
         }
     }).mount('#app');

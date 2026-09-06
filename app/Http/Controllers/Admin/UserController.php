@@ -92,7 +92,7 @@ class UserController extends Controller
         if ($role === 'admin') {
             $first = $request->input('first_name', '');
             $last = $request->input('last_name', '');
-            $accountModel->createAdmin($userId, $first, $request->input('middle_name', ''), $last, $profilePic, $adminCampusId);
+            $accountModel->createAdmin($userId, $first, $request->input('middle_name') ?? '', $last, $profilePic, $adminCampusId);
             $recipientName = trim("$first $last");
         } elseif ($role === 'employer') {
             $company = $request->input('company_name', '');
@@ -101,7 +101,7 @@ class UserController extends Controller
         } else {
             $first = $request->input('first_name', '');
             $last = $request->input('last_name', '');
-            $accountModel->createAlumni($userId, $first, $request->input('middle_name', ''), $last, $profilePic);
+            $accountModel->createAlumni($userId, $first, $request->input('middle_name') ?? '', $last, $profilePic);
             $recipientName = trim("$first $last");
         }
 

@@ -8,7 +8,7 @@
             <span class="sr-only">Loading...</span>
         </div>
         <!-- Toast Notification Area -->
-        <div class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-xs" aria-live="polite">
+        <div class="fixed top-4 right-4 z-[9999] space-y-3 w-full max-w-xs" aria-live="polite">
             <transition-group 
                 enter-active-class="transform transition duration-300 ease-out"
                 enter-from-class="translate-x-20 opacity-0"
@@ -175,11 +175,13 @@
                         <div v-else class="text-gray-500">No cover letter will be included with this application.</div>
                     </div>
                     <div v-else-if="applicationStep === 7">
-                        <h3 class="text-lg font-semibold mb-2 text-blue-700 dark:text-blue-300 flex items-center gap-2"><i class="fas fa-question-circle"></i> Employer Question</h3>
-                        <p class="text-gray-700 dark:text-gray-200 mb-2">{{ selectedJob.employer_question }}
-                            <span v-if="Number(selectedJob.employer_question_required)" class="ml-1 text-red-600 dark:text-red-400">*</span>
-                        </p>
-                        <textarea v-model="applicationAnswer" rows="4" placeholder="Type your answer here..." class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"></textarea>
+                        <h3 class="text-lg font-semibold mb-2 text-blue-700 dark:text-blue-300 flex items-center gap-2"><i class="fas fa-question-circle"></i> Employer Question<span v-if="selectedJob.questions && selectedJob.questions.length > 1">s</span></h3>
+                        <div v-for="q in selectedJob.questions" :key="q.id" class="mb-4">
+                            <p class="text-gray-700 dark:text-gray-200 mb-2">{{ q.question_text }}
+                                <span v-if="q.is_required" class="ml-1 text-red-600 dark:text-red-400">*</span>
+                            </p>
+                            <textarea v-model="applicationAnswers[q.id]" rows="4" placeholder="Type your answer here..." class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"></textarea>
+                        </div>
                     </div>
                     <!-- Stepper Navigation -->
                     <div class="flex justify-between mt-8">

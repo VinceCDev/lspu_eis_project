@@ -210,19 +210,41 @@ class Alumni
     public function addEducation(int $alumniId, array $data): int
     {
         $current = !empty($data['current']) && $data['current'] == '1' ? 1 : 0;
+        // See updateEducation() below for why '' / the literal string "null"
+        // must both become a real NULL for this column.
+        $endDate = in_array($data['end_date'] ?? '', ['', 'null'], true) ? null : $data['end_date'];
 
         return $this->insertGetId('INSERT INTO alumni_education (alumni_id, degree, school, start_date, end_date, current) VALUES (?, ?, ?, ?, ?, ?)', [
-            $alumniId, $data['degree'], $data['school'], $data['start_date'], $data['end_date'], $current,
+            $alumniId, $data['degree'], $data['school'], $data['start_date'], $endDate, $current,
         ]);
     }
 
     public function updateEducation(int $educationId, int $alumniId, array $data): bool
     {
         $current = !empty($data['current']) && $data['current'] == '1' ? 1 : 0;
+        // end_date is a nullable DATE column, but this DB's active strict
+        // SQL mode rejects anything that isn't NULL or a real date. The
+        // form can send '' (the disabled date input's value when "I
+        // currently study here" is checked) or, when re-editing an entry
+        // whose end_date was already null, the literal 4-character string
+        // "null" — FormData.append() stringifies a JS null argument, it
+        // doesn't send an actually-empty field.
+        $endDate = in_array($data['end_date'] ?? '', ['', 'null'], true) ? null : $data['end_date'];
 
-        return $this->runUpdate('UPDATE alumni_education SET degree=?, school=?, start_date=?, end_date=?, current=? WHERE education_id=? AND alumni_id=?', [
-            $data['degree'], $data['school'], $data['start_date'], $data['end_date'], $current, $educationId, $alumniId,
-        ]) > 0;
+        // Verified by ownership, not by the UPDATE's affected-row count —
+        // MySQL reports 0 affected rows whenever every column already held
+        // the value being written (e.g. saving an entry without actually
+        // changing anything), which would otherwise make a legitimate,
+        // successful save look like "not found".
+        if ($this->selectOne('SELECT education_id FROM alumni_education WHERE education_id = ? AND alumni_id = ?', [$educationId, $alumniId]) === null) {
+            return false;
+        }
+
+        $this->runUpdate('UPDATE alumni_education SET degree=?, school=?, start_date=?, end_date=?, current=? WHERE education_id=? AND alumni_id=?', [
+            $data['degree'], $data['school'], $data['start_date'], $endDate, $current, $educationId, $alumniId,
+        ]);
+
+        return true;
     }
 
     public function deleteEducation(int $educationId, int $alumniId): bool
@@ -232,7 +254,13 @@ class Alumni
 
     public function addSkill(int $alumniId, string $name, string $certificateText, ?string $certificateFile): int
     {
-        return $this->insertGetId('INSERT INTO alumni_skill (alumni_id, name, certificate, certificate_file) VALUES (?, ?, ?, ?)', [$alumniId, $name, $certificateText, $certificateFile]);
+        // certificate_file has no DB default and is NOT NULL — a
+        // certificate upload is optional here (see ProfileController::
+        // addSkill(), which only sets it when a file was actually
+        // attached), so '' is this codebase's established "not provided"
+        // placeholder for that case, same convention used for other
+        // optional-at-creation VARCHAR columns.
+        return $this->insertGetId('INSERT INTO alumni_skill (alumni_id, name, certificate, certificate_file) VALUES (?, ?, ?, ?)', [$alumniId, $name, $certificateText, $certificateFile ?? '']);
     }
 
     public function deleteSkill(int $skillId, int $alumniId): bool
@@ -263,9 +291,13 @@ class Alumni
     public function addExperience(int $alumniId, array $data): int
     {
         $current = !empty($data['current']) && $data['current'] == '1' ? 1 : 0;
+        // Same reasoning as updateExperience() below: end_date must be NULL,
+        // not '' or the stringified-null the disabled/unset date input can
+        // send, or this DB's strict SQL mode rejects the insert.
+        $endDate = $current ? null : (in_array($data['end_date'] ?? '', ['', 'null'], true) ? null : $data['end_date']);
 
         return $this->insertGetId('INSERT INTO alumni_experience (alumni_id, title, company, start_date, end_date, current, description, location_of_work, employment_status, employment_sector) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
-            $alumniId, $data['title'], $data['company'], $data['start_date'], $data['end_date'], $current,
+            $alumniId, $data['title'], $data['company'], $data['start_date'], $endDate, $current,
             $data['description'], $data['location_of_work'], $data['employment_status'], $data['employment_sector'],
         ]);
     }
@@ -273,7 +305,7 @@ class Alumni
     public function updateExperience(int $experienceId, int $alumniId, array $data): bool
     {
         $current = !empty($data['current']) && $data['current'] == '1' ? 1 : 0;
-        $endDate = $current ? null : $data['end_date'];
+        $endDate = $current || in_array($data['end_date'] ?? '', ['', 'null'], true) ? null : $data['end_date'];
 
         return $this->runUpdate('UPDATE alumni_experience SET title=?, company=?, start_date=?, end_date=?, current=?, description=?, location_of_work=?, employment_status=?, employment_sector=?, updated_at=NOW() WHERE experience_id=? AND alumni_id=?', [
             $data['title'], $data['company'], $data['start_date'], $endDate, $current,

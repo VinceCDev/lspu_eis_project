@@ -62,16 +62,18 @@
                     </td>
                     <td class="px-4 py-2 text-center">
                         <div class="relative inline-block text-left">
-                            <button @click="toggleActionDropdown(alumni.alumni_id)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none text-gray-600 dark:text-gray-300">
+                            <button @click="toggleActionDropdown(alumni.alumni_id, $event)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none text-gray-600 dark:text-gray-300">
                                 <i class="fas fa-ellipsis-h"></i>
                             </button>
-                            <div v-if="actionDropdown === alumni.alumni_id" class="origin-top-right absolute right-0 mt-2 w-32 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-10">
-                                <div class="py-1" @click="actionDropdown = null">
-                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-green-600 hover:bg-green-100 dark:hover:bg-green-800" @click.prevent="approveAlumni(alumni)"><i class="fas fa-check-circle mr-2"></i>Approve</a>
-                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" @click.prevent="viewAlumniDetails(alumni)"><i class="fas fa-eye mr-2"></i>View Profile</a>
-                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-100 dark:hover:bg-red-800" @click.prevent="confirmDelete(alumni)"><i class="fas fa-trash mr-2"></i>Delete</a>
+                            <teleport to="body">
+                                <div v-if="actionDropdown === alumni.alumni_id" class="teleported-action-dropdown fixed w-32 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-[300]" :style="{ top: dropdownPosition.top + 'px', left: dropdownPosition.left + 'px' }">
+                                    <div class="py-1" @click="actionDropdown = null">
+                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-green-600 hover:bg-green-100 dark:hover:bg-green-800" @click.prevent="approveAlumni(alumni)"><i class="fas fa-check-circle mr-2"></i>Approve</a>
+                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" @click.prevent="viewAlumniDetails(alumni)"><i class="fas fa-eye mr-2"></i>View Profile</a>
+                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-100 dark:hover:bg-red-800" @click.prevent="confirmDelete(alumni)"><i class="fas fa-trash mr-2"></i>Delete</a>
+                                    </div>
                                 </div>
-                            </div>
+                            </teleport>
                         </div>
                     </td>
                 </tr>

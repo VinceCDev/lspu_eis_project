@@ -165,22 +165,24 @@
                                 <!-- Actions -->
                                 <td class="px-4 py-3 text-center">
                                     <div class="relative inline-block text-left">
-                                        <button @click="toggleActionDropdown(match.match_id)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none text-gray-500 dark:text-gray-200">
+                                        <button @click="toggleActionDropdown(match.match_id, $event)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none text-gray-500 dark:text-gray-200">
                                             <i class="fas fa-ellipsis-h"></i>
                                         </button>
-                                        <div v-if="actionDropdown === match.match_id" class="origin-top-right absolute right-0 mt-2 w-40 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-10">
-                                            <div class="py-1" @click="actionDropdown = null">
-                                                <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" @click.prevent="viewAlumniProfile(match)">
-                                                    <i class="fas fa-eye mr-2"></i>View Profile
-                                                </a>
-                                                <a href="#" role="button" class="block px-4 py-2 text-sm text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-800" @click.prevent="contactAlumni(match)">
-                                                    <i class="fas fa-envelope mr-2"></i>Contact
-                                                </a>
-                                                <a href="#" role="button" class="block px-4 py-2 text-sm text-green-600 hover:bg-green-100 dark:hover:bg-green-800" @click.prevent="downloadProfile(match)">
-                                                    <i class="fas fa-download mr-2"></i>Download CV
-                                                </a>
+                                        <teleport to="body">
+                                            <div v-if="actionDropdown === match.match_id" class="teleported-action-dropdown fixed w-40 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-[300]" :style="{ top: dropdownPosition.top + 'px', left: dropdownPosition.left + 'px' }">
+                                                <div class="py-1" @click="actionDropdown = null">
+                                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" @click.prevent="viewAlumniProfile(match)">
+                                                        <i class="fas fa-eye mr-2"></i>View Profile
+                                                    </a>
+                                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-800" @click.prevent="contactAlumni(match)">
+                                                        <i class="fas fa-envelope mr-2"></i>Contact
+                                                    </a>
+                                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-green-600 hover:bg-green-100 dark:hover:bg-green-800" @click.prevent="downloadProfile(match)">
+                                                        <i class="fas fa-download mr-2"></i>Download CV
+                                                    </a>
+                                                </div>
                                             </div>
-                                        </div>
+                                        </teleport>
                                     </div>
                                 </td>
                             </tr>

@@ -61,10 +61,11 @@ class JobTest extends TestCase
         ]));
         $this->createdJobIds[] = $jobId;
 
-        $meta = (new Job())->questionMetaById($jobId);
-
-        $this->assertSame('', $meta['employer_question']);
-        $this->assertFalse($meta['employer_question_required']);
+        // A job now has an actual list of questions (job_questions), so
+        // "no question" means no rows at all — questionMetaById() returns
+        // null rather than a placeholder empty-string/false pair.
+        $this->assertNull((new Job())->questionMetaById($jobId));
+        $this->assertSame([], (new Job())->questionsByJobId($jobId));
     }
 
     public function testUpdateForEmployerSucceedsForTheOwningEmployer(): void

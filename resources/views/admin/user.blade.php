@@ -70,20 +70,22 @@
                     <td class="px-4 py-2 font-semibold text-gray-800 dark:text-gray-200 text-center">{{ account.last_login }}</td>
                     <td class="px-4 py-2 text-center">
                         <div class="relative inline-block text-left">
-                            <button @click="toggleActionDropdown(account.user_id)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none text-gray-500 dark:text-gray-200">
+                            <button @click="toggleActionDropdown(account.user_id, $event)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none text-gray-500 dark:text-gray-200">
                                 <i class="fas fa-ellipsis-h"></i>
                             </button>
-                            <div v-if="actionDropdown === account.user_id" class="origin-top-right absolute right-0 mt-2 w-44 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-10">
-                                <div class="py-1" @click="actionDropdown = null">
-                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" @click.prevent="viewAccount(account)"><i class="fas fa-eye mr-2"></i>View</a>
-                                    <template v-if="account.user_role !== 'superadmin'">
-                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-800" @click.prevent="openEditModal(account)"><i class="fas fa-edit mr-2"></i>Edit</a>
-                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-800" @click.prevent="resetAccountPassword(account)"><i class="fas fa-key mr-2"></i>Reset Password</a>
-                                        <a v-if="account.status !== 'Inactive'" href="#" role="button" class="block px-4 py-2 text-sm text-orange-600 hover:bg-orange-100 dark:hover:bg-orange-800" @click.prevent="confirmDeactivateModal(account)"><i class="fas fa-ban mr-2"></i>Deactivate</a>
-                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-100 dark:hover:bg-red-800" @click.prevent="confirmDelete(account)"><i class="fas fa-trash mr-2"></i>Delete</a>
-                                    </template>
+                            <teleport to="body">
+                                <div v-if="actionDropdown === account.user_id" class="teleported-action-dropdown fixed w-44 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-[300]" :style="{ top: dropdownPosition.top + 'px', left: dropdownPosition.left + 'px' }">
+                                    <div class="py-1" @click="actionDropdown = null">
+                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" @click.prevent="viewAccount(account)"><i class="fas fa-eye mr-2"></i>View</a>
+                                        <template v-if="account.user_role !== 'superadmin'">
+                                            <a href="#" role="button" class="block px-4 py-2 text-sm text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-800" @click.prevent="openEditModal(account)"><i class="fas fa-edit mr-2"></i>Edit</a>
+                                            <a href="#" role="button" class="block px-4 py-2 text-sm text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-800" @click.prevent="resetAccountPassword(account)"><i class="fas fa-key mr-2"></i>Reset Password</a>
+                                            <a v-if="account.status !== 'Inactive'" href="#" role="button" class="block px-4 py-2 text-sm text-orange-600 hover:bg-orange-100 dark:hover:bg-orange-800" @click.prevent="confirmDeactivateModal(account)"><i class="fas fa-ban mr-2"></i>Deactivate</a>
+                                            <a href="#" role="button" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-100 dark:hover:bg-red-800" @click.prevent="confirmDelete(account)"><i class="fas fa-trash mr-2"></i>Delete</a>
+                                        </template>
+                                    </div>
                                 </div>
-                            </div>
+                            </teleport>
                         </div>
                     </td>
                 </tr>

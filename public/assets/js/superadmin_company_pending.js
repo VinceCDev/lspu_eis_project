@@ -15,6 +15,7 @@ createApp({
             notifications: [],
             notificationId: 0,
             actionDropdown: null,
+            dropdownPosition: { top: 0, left: 0 },
             searchQuery: '',
             filters: {
                 industry_type: '',
@@ -172,11 +173,20 @@ createApp({
                 this.currentPage = this.paginationGroup.nextGroupStart;
             }
         },
-        toggleActionDropdown(companyId) {
-            this.actionDropdown = this.actionDropdown === companyId ? null : companyId;
+        toggleActionDropdown(companyId, event) {
+            if (this.actionDropdown === companyId) {
+                this.actionDropdown = null;
+                return;
+            }
+            this.actionDropdown = companyId;
+            this.$nextTick(() => {
+                const btn = event.currentTarget;
+                const rect = btn.getBoundingClientRect();
+                this.dropdownPosition = { top: rect.bottom + 4, left: rect.right - 128 };
+            });
         },
         handleClickOutsideDropdown(event) {
-            if (this.actionDropdown !== null && !event.target.closest('.relative.inline-block.text-left')) {
+            if (this.actionDropdown !== null && !event.target.closest('.relative.inline-block.text-left') && !event.target.closest('.teleported-action-dropdown')) {
                 this.actionDropdown = null;
             }
         },

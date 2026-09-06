@@ -77,4 +77,22 @@ class ProfileController extends Controller
 
         return response()->json(['success' => true, 'message' => 'Profile photo updated.', 'profile_pic' => $path]);
     }
+
+    public function deletePhoto(): JsonResponse
+    {
+        $userId = (int) Auth::user()['user_id'];
+        $profile = (new Account())->adminDetailsByUserId($userId, Auth::user()['email'] ?? '');
+
+        if ($profile && $profile['profile_pic']) {
+            $relative = ltrim(str_replace('uploads/', '', $profile['profile_pic']), '/');
+            $path = Uploader::basePath($relative);
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+
+        (new Account())->updateAdminProfilePic($userId, '');
+
+        return response()->json(['success' => true, 'message' => 'Profile photo deleted.']);
+    }
 }

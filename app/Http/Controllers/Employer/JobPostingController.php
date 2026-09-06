@@ -46,8 +46,11 @@ class JobPostingController extends Controller
             $data[$field] = $request->input($field, '');
         }
         $data['salary'] = $request->input('salary', '');
-        $data['employer_question'] = trim($request->input('employer_question', ''));
-        $data['employer_question_required'] = ($data['employer_question'] !== '' && in_array($request->input('employer_question_required', ''), ['1', 'true'], true)) ? 1 : 0;
+        $data['questions'] = $this->parseQuestions($request->input('questions', '[]'));
+        // Legacy single-question columns mirror question #1, kept only for
+        // any code path still reading them directly off the jobs row.
+        $data['employer_question'] = $data['questions'][0]['question_text'] ?? '';
+        $data['employer_question_required'] = ($data['questions'][0]['is_required'] ?? false) ? 1 : 0;
 
         foreach ($fields as $field) {
             if ($data[$field] === '') {
@@ -72,6 +75,34 @@ class JobPostingController extends Controller
             'success' => true,
             'message' => $isUpdate ? 'Job updated successfully.' : 'Job created successfully.',
         ]);
+    }
+
+    /**
+     * Decodes the frontend's JSON-encoded questions array into the shape
+     * Job::replaceQuestions() expects, silently dropping any malformed or
+     * blank-text entries rather than failing the whole save over them.
+     *
+     * @return array<int, array{question_text: string, is_required: bool}>
+     */
+    private function parseQuestions(string $json): array
+    {
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($decoded as $q) {
+            if (!is_array($q) || trim((string) ($q['question_text'] ?? '')) === '') {
+                continue;
+            }
+            $out[] = [
+                'question_text' => trim((string) $q['question_text']),
+                'is_required' => !empty($q['is_required']),
+            ];
+        }
+
+        return $out;
     }
 
     public function destroy(Request $request): JsonResponse

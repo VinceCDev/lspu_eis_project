@@ -199,7 +199,7 @@ createApp({
             applicationExperience: null, // New state for work experience
             applicationResume: null, // New state for resume file
             applicationCoverLetter: { mode: 'skip', file: null, file_name: '', text: '' },
-            applicationAnswer: '',
+            applicationAnswers: {}, // job_question_id -> answer text
             showChatOverlay: false, // New state for chat overlay
             chatSearchQuery: '', // New state for chat search query
             unreadMessagesCount: 0, // New state for unread messages count
@@ -243,7 +243,7 @@ createApp({
     },
     computed: {
         totalApplicationSteps() {
-            return this.selectedJob && this.selectedJob.employer_question ? 7 : 6;
+            return this.selectedJob && this.selectedJob.questions && this.selectedJob.questions.length ? 7 : 6;
         },
         paginatedJobs() {
             const start = (this.currentPage - 1) * this.itemsPerPage;
@@ -544,9 +544,7 @@ createApp({
                         description: job.description,
                         requirements: job.requirements,
                         qualifications: job.qualifications ? job.qualifications.split('\n') : [],
-                        questions: job.employer_question ? [{ text: job.employer_question, type: 'textarea' }] : [],
-                        employer_question: job.employer_question || '',
-                        employer_question_required: job.employer_question_required,
+                        questions: Array.isArray(job.questions) ? job.questions : [],
                         saved: savedJobIds.map(String).includes(String(job.job_id)),
                         employer_id: job.employer_id, // Make sure this is included
                         companyDetails: {
@@ -1026,8 +1024,11 @@ createApp({
                 return;
             }
 
-            if (this.selectedJob.employer_question && Number(this.selectedJob.employer_question_required) && !this.applicationAnswer.trim()) {
-                this.showNotification('Please answer the employer question before submitting.', 'error');
+            const unansweredRequired = (this.selectedJob.questions || []).some(
+                (q) => q.is_required && !(this.applicationAnswers[q.id] || '').trim()
+            );
+            if (unansweredRequired) {
+                this.showNotification('Please answer the required employer question(s) before submitting.', 'error');
                 return;
             }
 
@@ -1041,7 +1042,7 @@ createApp({
             } else if (this.applicationCoverLetter.mode === 'write') {
                 formData.append('cover_letter_text', this.applicationCoverLetter.text);
             }
-            formData.append('employer_question_answer', this.applicationAnswer);
+            formData.append('answers', JSON.stringify(this.applicationAnswers));
 
             try {
                 const res = await fetch('home?action=apply', {
@@ -1063,7 +1064,7 @@ createApp({
                     this.applicationExperience = null;
                     this.applicationResume = null;
                     this.applicationCoverLetter = { mode: 'skip', file: null, file_name: '', text: '' };
-                    this.applicationAnswer = '';
+                    this.applicationAnswers = {};
                     this.fetchApplicationData(); // Refresh application data
                 } else {
                     this.showNotification(data.message || 'Failed to submit application.', 'error');
@@ -1119,7 +1120,7 @@ createApp({
             this.applicationExperience = null;
             this.applicationResume = null;
             this.applicationCoverLetter = { mode: 'skip', file: null, file_name: '', text: '' };
-            this.applicationAnswer = '';
+            this.applicationAnswers = {};
         },
         nextStep() {
             this.applicationStep++;

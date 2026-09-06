@@ -239,6 +239,18 @@ createApp({
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    // Without this, this chart's default grow-in animation
+                    // can still have an in-flight requestAnimationFrame when
+                    // it gets destroyed and immediately recreated — it's
+                    // rendered from two independent, uncoordinated fetches
+                    // (see mounted()'s dedicated courseWorkAlignment call and
+                    // initCharts() below), which race on real page loads.
+                    // The stale frame then fires against a canvas Chart.js
+                    // already nulled out during destroy(), throwing
+                    // "Cannot read properties of null (reading 'getContext')"
+                    // from Chart.js's global animator. Every other chart on
+                    // this page already sets duration: 0 for the same reason.
+                    animation: { duration: 0 },
                     plugins: { legend: { position: 'bottom', labels: { color: textColor } } }
                 }
             });

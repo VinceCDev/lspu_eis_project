@@ -10,7 +10,7 @@
                 </div>
             </div>
             <!-- Notification Area -->
-            <div class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-xs" aria-live="polite">
+            <div class="fixed top-4 right-4 z-[9999] space-y-3 w-full max-w-xs" aria-live="polite">
                 <transition-group 
                     enter-active-class="transform transition duration-300 ease-out"
                     enter-from-class="translate-x-20 opacity-0"
@@ -402,10 +402,12 @@
                                         <i class="fas fa-file"></i> View uploaded cover letter
                                     </a>
                                 </div>
-                                <div v-if="selectedJobDetails.employer_question" class="mb-6">
-                                    <h5 class="text-lg font-bold text-blue-700 dark:text-blue-300 mb-3">Employer Question</h5>
-                                    <p class="text-gray-700 dark:text-gray-200 mb-2">{{ selectedJobDetails.employer_question }}</p>
-                                    <p class="text-gray-700 dark:text-gray-200 whitespace-pre-line bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700"><strong>Your answer:</strong> {{ selectedJobDetails.application_answer || 'No answer provided.' }}</p>
+                                <div v-if="selectedJobDetails.answers && selectedJobDetails.answers.length" class="mb-6">
+                                    <h5 class="text-lg font-bold text-blue-700 dark:text-blue-300 mb-3">Employer Question<span v-if="selectedJobDetails.answers.length > 1">s</span></h5>
+                                    <div v-for="a in selectedJobDetails.answers" :key="a.question_id" class="mb-4">
+                                        <p class="text-gray-700 dark:text-gray-200 mb-2">{{ a.question_text }}</p>
+                                        <p class="text-gray-700 dark:text-gray-200 whitespace-pre-line bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700"><strong>Your answer:</strong> {{ a.answer_text || 'No answer provided.' }}</p>
+                                    </div>
                                 </div>
                                 <!-- Company Details Section -->
                                 <div v-if="selectedJobDetails.companyDetails" class="mb-6 border border-blue-200 dark:border-blue-700 rounded-lg bg-blue-50 dark:bg-blue-900/30 p-4">
@@ -696,12 +698,14 @@
 
                         <div v-else-if="applicationStep === 7">
                             <h3 class="text-lg font-semibold mb-2 text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                                <i class="fas fa-question-circle"></i> Employer Question
+                                <i class="fas fa-question-circle"></i> Employer Question<span v-if="selectedJob.questions && selectedJob.questions.length > 1">s</span>
                             </h3>
-                            <p class="text-gray-700 dark:text-gray-200 mb-2">{{ selectedJob.employer_question }}
-                                <span v-if="Number(selectedJob.employer_question_required)" class="ml-1 text-red-600 dark:text-red-400">*</span>
-                            </p>
-                            <textarea v-model="applicationAnswer" rows="4" placeholder="Type your answer here..." class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"></textarea>
+                            <div v-for="q in selectedJob.questions" :key="q.id" class="mb-4">
+                                <p class="text-gray-700 dark:text-gray-200 mb-2">{{ q.question_text }}
+                                    <span v-if="q.is_required" class="ml-1 text-red-600 dark:text-red-400">*</span>
+                                </p>
+                                <textarea v-model="applicationAnswers[q.id]" rows="4" placeholder="Type your answer here..." class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"></textarea>
+                            </div>
                         </div>
 
                         <!-- Stepper Navigation -->

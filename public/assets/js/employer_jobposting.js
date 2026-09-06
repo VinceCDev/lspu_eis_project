@@ -20,6 +20,7 @@ createApp({
             selectedJob: null,
             showDeleteModal: false,
             actionDropdown: null,
+            dropdownPosition: { top: 0, left: 0 },
             jobForm: {
                 title: '',
                 type: '',
@@ -31,10 +32,8 @@ createApp({
                 qualifications: '',
                 salary: '',
                 status: 'Active',
-                employer_question: '',
-                employer_question_required: false
+                questions: []
             },
-            showQuestionField: false,
             workSetups: ['Onsite', 'Remote', 'Hybrid'],
             jobClassifications: [
                 'Accounting / Finance',
@@ -216,26 +215,28 @@ createApp({
                 qualifications: '',
                 salary: '',
                 status: 'Active',
-                employer_question: '',
-                employer_question_required: false
+                questions: []
             };
-            this.showQuestionField = false;
             this.showJobModal = true;
         },
         openEditModal(job) {
             this.modalMode = 'edit';
             this.selectedJob = job;
-            this.jobForm = { ...job, employer_question_required: !!Number(job.employer_question_required) };
-            this.showQuestionField = !!job.employer_question;
+            // `job.questions` is the current multi-question list from the
+            // server; fall back to the legacy single employer_question
+            // column only for a row the backend hasn't attached questions
+            // to yet (shouldn't happen post-migration, but cheap to guard).
+            const questions = Array.isArray(job.questions) && job.questions.length
+                ? job.questions.map((q) => ({ question_text: q.question_text, is_required: !!q.is_required }))
+                : (job.employer_question ? [{ question_text: job.employer_question, is_required: !!Number(job.employer_question_required) }] : []);
+            this.jobForm = { ...job, questions };
             this.showJobModal = true;
         },
-        addQuestionField() {
-            this.showQuestionField = true;
+        addQuestion() {
+            this.jobForm.questions.push({ question_text: '', is_required: false });
         },
-        removeQuestionField() {
-            this.showQuestionField = false;
-            this.jobForm.employer_question = '';
-            this.jobForm.employer_question_required = false;
+        removeQuestion(index) {
+            this.jobForm.questions.splice(index, 1);
         },
         viewJob(job) {
             this.modalMode = 'view';
@@ -284,11 +285,13 @@ createApp({
             try {
                 const formData = new FormData();
                 for (const key in this.jobForm) {
+                    if (key === 'questions') continue; // sent separately as JSON below
                     // Allow empty salary field
                     if (this.jobForm[key] !== null && this.jobForm[key] !== undefined) {
                         formData.append(key, this.jobForm[key] || ''); // Use empty string if falsy
                     }
                 }
+                formData.append('questions', JSON.stringify(this.jobForm.questions || []));
                 const res = await fetch('employer_jobposting?action=store', {
                     method: 'POST',
                     body: formData
@@ -305,21 +308,23 @@ createApp({
                 this.isSubmitting = false;
             }
         },
-        
+
         async updateJob() {
             // Prevent multiple submissions
             if (this.isSubmitting) return;
-            
+
             this.isSubmitting = true;
-            
+
             try {
                 const formData = new FormData();
                 for (const key in this.jobForm) {
+                    if (key === 'questions') continue; // sent separately as JSON below
                     // Allow empty salary field
                     if (this.jobForm[key] !== null && this.jobForm[key] !== undefined) {
                         formData.append(key, this.jobForm[key] || ''); // Use empty string if falsy
                     }
                 }
+                formData.append('questions', JSON.stringify(this.jobForm.questions || []));
                 formData.append('job_id', this.selectedJob.id || this.selectedJob.job_id);
                 const res = await fetch('employer_jobposting?action=store', {
                     method: 'POST',
@@ -341,7 +346,7 @@ createApp({
         },
         async deleteJob() {
             try {
-                const res = await fetch('employer_jobposting?action=store', {
+                const res = await fetch('employer_jobposting?action=destroy', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ job_id: this.selectedJob.id || this.selectedJob.job_id })
@@ -362,11 +367,20 @@ createApp({
             this.actionDropdown = null;
             this.isSubmitting = false;
         },
-        toggleActionDropdown(jobId) {
-            this.actionDropdown = this.actionDropdown === jobId ? null : jobId;
+        toggleActionDropdown(jobId, event) {
+            if (this.actionDropdown === jobId) {
+                this.actionDropdown = null;
+                return;
+            }
+            this.actionDropdown = jobId;
+            this.$nextTick(() => {
+                const btn = event.currentTarget;
+                const rect = btn.getBoundingClientRect();
+                this.dropdownPosition = { top: rect.bottom + 4, left: rect.right - 128 };
+            });
         },
         handleClickOutsideDropdown(event) {
-            if (this.actionDropdown !== null && !event.target.closest('.relative.inline-block.text-left')) {
+            if (this.actionDropdown !== null && !event.target.closest('.relative.inline-block.text-left') && !event.target.closest('.teleported-action-dropdown')) {
                 this.actionDropdown = null;
             }
         },

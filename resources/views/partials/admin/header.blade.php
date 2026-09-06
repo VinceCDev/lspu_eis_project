@@ -13,7 +13,7 @@ $rolePrefix = \App\Core\Auth::role() === 'superadmin' ? 'superadmin' : 'admin';
 >
     <div v-if="notifications.length > 0" @click="removeNotification(notifications[0].id)"
         :class="[
-            'notification-toast cursor-pointer fixed top-4 right-4 z-[100] max-w-sm w-full pointer-events-auto',
+            'notification-toast cursor-pointer fixed top-4 right-4 z-[9999] max-w-sm w-full pointer-events-auto',
             notifications[0].type === 'success' ? 'bg-green-100 border-green-500 text-green-700 dark:bg-green-900 dark:border-green-700 dark:text-green-100' : '',
             notifications[0].type === 'error' ? 'bg-red-100 border-red-500 text-red-700 dark:bg-red-900 dark:border-red-700 dark:text-red-100' : '',
             notifications[0].type === 'info' ? 'bg-blue-100 border-blue-500 text-blue-700 dark:bg-blue-900 dark:border-blue-700 dark:text-blue-100' : '',

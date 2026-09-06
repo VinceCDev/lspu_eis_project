@@ -15,6 +15,7 @@ createApp({
             notifications: [],
             notificationId: 0,
             actionDropdown: null,
+            dropdownPosition: { top: 0, left: 0 },
             alumni: [],
             searchQuery: '',
             itemsPerPage: 5,
@@ -325,20 +326,6 @@ createApp({
                 }
             },
 
-            // Add this method to view alumni details
-            viewAlumniDetails(alumni) {
-                this.viewAlumniData = {
-                    ...alumni,
-                    skills: alumni.skills || [],
-                    experiences: alumni.experiences || [],
-                    documents: alumni.documents || [],
-                    employment: alumni.employment,
-                    profile_picture: alumni.profile_picture // Correct path: /uploads/profile_picture/
-                };
-                this.showViewModal = true;
-                this.$nextTick(() => this.focusFirstInput('view-modal'));
-            },
-
             // Add this method to close the view modal
             closeViewModal() {
                 this.showViewModal = false;
@@ -481,11 +468,20 @@ createApp({
                 document.body.classList.remove('dark');
             }
         },
-        toggleActionDropdown(id) {
-            this.actionDropdown = this.actionDropdown === id ? null : id;
+        toggleActionDropdown(id, event) {
+            if (this.actionDropdown === id) {
+                this.actionDropdown = null;
+                return;
+            }
+            this.actionDropdown = id;
+            this.$nextTick(() => {
+                const btn = event.currentTarget;
+                const rect = btn.getBoundingClientRect();
+                this.dropdownPosition = { top: rect.bottom + 4, left: rect.right - 128 };
+            });
         },
         handleClickOutsideDropdown(event) {
-            if (this.actionDropdown !== null && !event.target.closest('.relative.inline-block.text-left')) {
+            if (this.actionDropdown !== null && !event.target.closest('.relative.inline-block.text-left') && !event.target.closest('.teleported-action-dropdown')) {
                 this.actionDropdown = null;
             }
         },

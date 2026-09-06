@@ -65,16 +65,18 @@
                                 <td class="px-4 py-2 text-gray-800 dark:text-gray-200 text-center">{{ formatDate(job.created_at) }}</td>
                                 <td class="px-4 py-2 text-center">
                                     <div class="relative inline-block text-left">
-                                        <button @click="toggleActionDropdown(job.id)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none text-gray-500 dark:text-gray-200">
+                                        <button @click="toggleActionDropdown(job.id, $event)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none text-gray-500 dark:text-gray-200">
                                             <i class="fas fa-ellipsis-h"></i>
                                             </button>
-                                        <div v-if="actionDropdown === job.id" class="origin-top-right absolute right-0 mt-2 w-32 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-10">
-                                            <div class="py-1" @click="actionDropdown = null">
-                                                <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" @click.prevent="viewJob(job)"><i class="fas fa-eye mr-2"></i>View</a>
-                                                <a href="#" role="button" class="block px-4 py-2 text-sm text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-800" @click.prevent="openEditModal(job)"><i class="fas fa-edit mr-2"></i>Edit</a>
-                                                <a href="#" role="button" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-100 dark:hover:bg-red-800" @click.prevent="confirmDelete(job)"><i class="fas fa-trash mr-2"></i>Delete</a>
+                                        <teleport to="body">
+                                            <div v-if="actionDropdown === job.id" class="teleported-action-dropdown fixed w-32 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-[300]" :style="{ top: dropdownPosition.top + 'px', left: dropdownPosition.left + 'px' }">
+                                                <div class="py-1" @click="actionDropdown = null">
+                                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" @click.prevent="viewJob(job)"><i class="fas fa-eye mr-2"></i>View</a>
+                                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-800" @click.prevent="openEditModal(job)"><i class="fas fa-edit mr-2"></i>Edit</a>
+                                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-100 dark:hover:bg-red-800" @click.prevent="confirmDelete(job)"><i class="fas fa-trash mr-2"></i>Delete</a>
+                                                </div>
                                             </div>
-                                        </div>
+                                        </teleport>
                                         </div>
                                     </td>
                                 </tr>
@@ -253,25 +255,28 @@
                             </div>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Applicant Question <span class="text-gray-400 font-normal">(optional)</span>
-                            </label>
-                            <button v-if="!showQuestionField" type="button" @click="addQuestionField"
-                                class="mt-1 inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
-                                <i class="fas fa-plus-circle"></i> Add Question
-                            </button>
-                            <div v-else class="mt-1 border border-gray-300 dark:border-gray-600 rounded-md p-3 bg-gray-50 dark:bg-gray-900/50">
+                            <div class="flex items-center justify-between gap-2">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Employer Question <span class="text-gray-400 font-normal">(optional)</span>
+                                </label>
+                                <button type="button" @click="addQuestion"
+                                    class="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
+                                    <i class="fas fa-plus-circle"></i> Add Question
+                                </button>
+                            </div>
+                            <div v-for="(question, qIndex) in jobForm.questions" :key="qIndex"
+                                class="mt-2 border border-gray-300 dark:border-gray-600 rounded-md p-3 bg-gray-50 dark:bg-gray-900/50">
                                 <div class="flex justify-between items-start gap-2">
-                                    <textarea id="jobEmployerQuestion" v-model="jobForm.employer_question" rows="2"
+                                    <textarea :id="'jobEmployerQuestion' + qIndex" v-model="question.question_text" rows="2"
                                         placeholder="e.g. Why are you interested in this role?"
                                         class="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"></textarea>
-                                    <button type="button" @click="removeQuestionField" title="Remove question"
+                                    <button type="button" @click="removeQuestion(qIndex)" title="Remove question"
                                         class="mt-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400">
                                         <i class="fas fa-times"></i>
                                     </button>
                                 </div>
                                 <label class="mt-2 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                                    <input type="checkbox" v-model="jobForm.employer_question_required" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                                    <input type="checkbox" v-model="question.is_required" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
                                     Require applicants to answer this question
                                 </label>
                             </div>
@@ -349,11 +354,11 @@
                   <div class="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 shadow-sm mb-4 whitespace-pre-line text-gray-700 dark:text-gray-200">• {{ selectedJob.requirements }}</div>
                   <h4 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-100 flex items-center gap-2"><i class="fas fa-graduation-cap text-blue-500 dark:text-blue-300"></i> <span>Qualifications</span></h4>
                   <div class="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 shadow-sm mb-4 whitespace-pre-line text-gray-700 dark:text-gray-200">• {{ selectedJob.qualifications }}</div>
-                  <div v-if="selectedJob.employer_question">
-                    <h4 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-100 flex items-center gap-2"><i class="fas fa-question-circle text-blue-500 dark:text-blue-300"></i> <span>Applicant Question</span></h4>
-                    <div class="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 shadow-sm mb-4 text-gray-700 dark:text-gray-200">
-                      {{ selectedJob.employer_question }}
-                      <span v-if="Number(selectedJob.employer_question_required)" class="ml-2 inline-block px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200">Required</span>
+                  <div v-if="selectedJob.questions && selectedJob.questions.length">
+                    <h4 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-100 flex items-center gap-2"><i class="fas fa-question-circle text-blue-500 dark:text-blue-300"></i> <span>Employer Question<span v-if="selectedJob.questions.length > 1">s</span></span></h4>
+                    <div v-for="q in selectedJob.questions" :key="q.id" class="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 shadow-sm mb-2 text-gray-700 dark:text-gray-200">
+                      {{ q.question_text }}
+                      <span v-if="q.is_required" class="ml-2 inline-block px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200">Required</span>
                     </div>
                   </div>
                     </div>

@@ -129,7 +129,14 @@ class Account
 
     public function createAdmin(int $userId, string $firstName, string $middleName, string $lastName, ?string $profilePic, ?int $campusId = null): void
     {
-        $this->insert('INSERT INTO administrator (user_id, first_name, middle_name, last_name, profile_pic, campus_id) VALUES (?, ?, ?, ?, ?, ?)', [$userId, $firstName, $middleName, $lastName, $profilePic, $campusId]);
+        // `address` has no DB default and is meant to be filled in later by
+        // the admin themselves via their own profile page (see
+        // Admin\ProfileController's own updatable-field list, which
+        // already includes 'address' as an editable-after-the-fact field)
+        // — empty string is this codebase's established placeholder for
+        // "not yet provided" here, same convention Employer\ProfileController
+        // already uses for company_location.
+        $this->insert('INSERT INTO administrator (user_id, first_name, middle_name, last_name, profile_pic, campus_id, address) VALUES (?, ?, ?, ?, ?, ?, ?)', [$userId, $firstName, $middleName, $lastName, $profilePic, $campusId, '']);
     }
 
     public function adminDetailsByUserId(int $userId, string $email): ?array
@@ -179,12 +186,35 @@ class Account
 
     public function createEmployer(int $userId, string $companyName, string $industryType, ?string $companyLogo): void
     {
-        $this->insert('INSERT INTO employer (user_id, company_name, company_logo, industry_type) VALUES (?, ?, ?, ?)', [$userId, $companyName, $companyLogo, $industryType]);
+        // The admin quick-create modal only collects company_name/
+        // industry_type/logo — every other employer profile column is
+        // required at the DB level with no default. Employer\
+        // ProfileController's own "no employer row yet" fallback already
+        // treats company_location => '' (and the other string fields) as
+        // the correct "not yet provided" value, completed later via the
+        // employer's own profile page — same convention applied here.
+        // date_established has no sensible "unknown" string under this
+        // DB's strict SQL mode (DATE columns reject '' outright), so it's
+        // nullable (see the accompanying migration) and passed as NULL.
+        $this->insert(
+            'INSERT INTO employer (user_id, company_name, company_logo, industry_type, company_location, contact_email, contact_number, nature_of_business, tin, date_established, company_type, accreditation_status, document_file) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [$userId, $companyName, $companyLogo, $industryType, '', '', '', '', '', null, '', '', '']
+        );
     }
 
     public function createAlumni(int $userId, string $firstName, string $middleName, string $lastName, ?string $profilePic): void
     {
-        $this->insert('INSERT INTO alumni (user_id, first_name, middle_name, last_name, profile_pic) VALUES (?, ?, ?, ?, ?)', [$userId, $firstName, $middleName, $lastName, $profilePic]);
+        // Same situation as createEmployer() above: the admin quick-create
+        // modal only collects name/photo — every other alumni profile
+        // column is required with no default. String fields get '' (fill
+        // in later via the alumni's own profile); birthdate/year_graduated
+        // have no valid "unknown" string under this DB's strict SQL mode,
+        // so they're nullable (see the accompanying migration) and passed
+        // as NULL.
+        $this->insert(
+            'INSERT INTO alumni (user_id, first_name, middle_name, last_name, profile_pic, verification_document, birthdate, contact, gender, civil_status, city, province, year_graduated, college, course) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [$userId, $firstName, $middleName, $lastName, $profilePic, '', null, '', '', '', '', '', null, '', '']
+        );
     }
 
     public function updateAdmin(int $userId, string $email, string $firstName, string $middleName, string $lastName, string $status, ?string $profilePic, ?int $campusId = null): void

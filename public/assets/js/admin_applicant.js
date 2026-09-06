@@ -22,6 +22,7 @@ createApp({
             showDeleteModal: false,
             applicantToDelete: null,
             actionDropdown: null,
+            dropdownPosition: { top: 0, left: 0 },
             filters: {
                 status: '',
                 appliedFor: '',
@@ -165,11 +166,20 @@ createApp({
                 document.body.classList.remove('dark');
             }
         },
-        toggleActionDropdown(id) {
-            this.actionDropdown = this.actionDropdown === id ? null : id;
+        toggleActionDropdown(id, event) {
+            if (this.actionDropdown === id) {
+                this.actionDropdown = null;
+                return;
+            }
+            this.actionDropdown = id;
+            this.$nextTick(() => {
+                const btn = event.currentTarget;
+                const rect = btn.getBoundingClientRect();
+                this.dropdownPosition = { top: rect.bottom + 4, left: rect.right - 128 };
+            });
         },
         handleClickOutsideDropdown(event) {
-            if (this.actionDropdown !== null && !event.target.closest('.relative.inline-block.text-left')) {
+            if (this.actionDropdown !== null && !event.target.closest('.relative.inline-block.text-left') && !event.target.closest('.teleported-action-dropdown')) {
                 this.actionDropdown = null;
             }
         },

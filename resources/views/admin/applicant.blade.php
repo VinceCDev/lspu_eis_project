@@ -78,15 +78,17 @@
                     </td>
                     <td class="px-4 py-2 text-center">
                         <div class="relative inline-block text-left">
-                            <button @click="toggleActionDropdown(applicant.id)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none text-gray-500 dark:text-gray-200">
+                            <button @click="toggleActionDropdown(applicant.id, $event)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none text-gray-500 dark:text-gray-200">
                                 <i class="fas fa-ellipsis-h"></i>
                             </button>
-                            <div v-if="actionDropdown === applicant.id" class="origin-top-right absolute right-0 mt-2 w-32 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-10">
-                                <div class="py-1" @click="actionDropdown = null">
-                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" @click.prevent="viewApplicant(applicant)"><i class="fas fa-eye mr-2"></i>View</a>
-                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-100 dark:hover:bg-red-800" @click.prevent="confirmDelete(applicant)"><i class="fas fa-trash mr-2"></i>Delete</a>
+                            <teleport to="body">
+                                <div v-if="actionDropdown === applicant.id" class="teleported-action-dropdown fixed w-32 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-[300]" :style="{ top: dropdownPosition.top + 'px', left: dropdownPosition.left + 'px' }">
+                                    <div class="py-1" @click="actionDropdown = null">
+                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" @click.prevent="viewApplicant(applicant)"><i class="fas fa-eye mr-2"></i>View</a>
+                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-100 dark:hover:bg-red-800" @click.prevent="confirmDelete(applicant)"><i class="fas fa-trash mr-2"></i>Delete</a>
+                                    </div>
                                 </div>
-                            </div>
+                            </teleport>
                         </div>
                     </td>
                 </tr>
@@ -276,9 +278,11 @@
       <div class="mb-6">
         <h4 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-100 flex items-center gap-2"><i class="fas fa-question-circle text-blue-500 dark:text-blue-300"></i> <span>Applicant Question</span></h4>
         <div class="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 shadow-sm">
-          <template v-if="selectedApplicant.job && selectedApplicant.job.employer_question">
-            <p class="text-gray-700 dark:text-gray-200 mb-2">{{ selectedApplicant.job.employer_question }}</p>
-            <p class="text-gray-700 dark:text-gray-200 whitespace-pre-line border-t border-gray-200 dark:border-gray-700 pt-2"><strong>Answer:</strong> {{ (selectedApplicant.alumni && selectedApplicant.alumni.application_answer) || 'No answer provided.' }}</p>
+          <template v-if="selectedApplicant.job && selectedApplicant.job.answers && selectedApplicant.job.answers.length">
+            <div v-for="a in selectedApplicant.job.answers" :key="a.question_id" class="mb-3">
+              <p class="text-gray-700 dark:text-gray-200 mb-2">{{ a.question_text }}</p>
+              <p class="text-gray-700 dark:text-gray-200 whitespace-pre-line border-t border-gray-200 dark:border-gray-700 pt-2"><strong>Answer:</strong> {{ a.answer_text || 'No answer provided.' }}</p>
+            </div>
           </template>
           <p v-else class="text-gray-500 dark:text-gray-400 italic">No question was set by the employer for this job.</p>
         </div>

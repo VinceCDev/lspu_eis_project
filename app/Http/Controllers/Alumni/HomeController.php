@@ -128,13 +128,26 @@ class HomeController extends Controller
             ], 'cover_letters');
         }
 
-        $questionMeta = (new Job())->questionMetaById($jobId);
-        $applicationAnswer = trim($request->input('employer_question_answer', '')) ?: null;
-        if ($questionMeta && $questionMeta['employer_question'] !== '' && $questionMeta['employer_question_required'] && !$applicationAnswer) {
-            return response()->json(['success' => false, 'message' => 'Please answer the employer question before submitting.']);
+        $questions = (new Job())->questionsByJobId($jobId);
+        $submittedAnswers = json_decode((string) $request->input('answers', '{}'), true);
+        if (!is_array($submittedAnswers)) {
+            $submittedAnswers = [];
         }
+        $answers = [];
+        foreach ($questions as $q) {
+            $text = trim((string) ($submittedAnswers[$q['id']] ?? ''));
+            if ($q['is_required'] && $text === '') {
+                return response()->json(['success' => false, 'message' => 'Please answer the required employer question(s) before submitting.']);
+            }
+            if ($text !== '') {
+                $answers[$q['id']] = $text;
+            }
+        }
+        // Legacy single-answer column mirrors question #1's answer, for any
+        // code path still reading it directly off the applications row.
+        $applicationAnswer = $answers[$questions[0]['id'] ?? 0] ?? null;
 
-        if (!$application->createForAlumni($alumniId, $jobId, $coverLetterText, $coverLetterFile, $applicationAnswer)) {
+        if (!$application->createForAlumni($alumniId, $jobId, $coverLetterText, $coverLetterFile, $applicationAnswer, $answers)) {
             return response()->json(['success' => false, 'message' => 'Failed to apply']);
         }
 

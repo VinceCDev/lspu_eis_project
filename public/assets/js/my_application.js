@@ -96,7 +96,7 @@ const { createApp } = Vue;
                     applicationExperience: null,
                     applicationResume: null,
                     applicationCoverLetter: { mode: 'skip', file: null, file_name: '', text: '' },
-                    applicationAnswer: '',
+                    applicationAnswers: {}, // job_question_id -> answer text
                     highlightJobId: null
                 };
             },
@@ -280,7 +280,7 @@ const { createApp } = Vue;
                                 application_status: this.selectedJob.application_status,
                                 cover_letter_text: this.selectedJob.cover_letter_text,
                                 cover_letter_file: this.selectedJob.cover_letter_file,
-                                application_answer: this.selectedJob.application_answer
+                                answers: this.selectedJob.answers || []
                             };
                             
                             console.log('Processed job details:', this.selectedJobDetails); // Debug line
@@ -563,8 +563,11 @@ const { createApp } = Vue;
                         return;
                     }
 
-                    if (this.selectedJob.employer_question && Number(this.selectedJob.employer_question_required) && !this.applicationAnswer.trim()) {
-                        this.addNotification('error', 'Error', 'Please answer the employer question before submitting.');
+                    const unansweredRequired = (this.selectedJob.questions || []).some(
+                        (q) => q.is_required && !(this.applicationAnswers[q.id] || '').trim()
+                    );
+                    if (unansweredRequired) {
+                        this.addNotification('error', 'Error', 'Please answer the required employer question(s) before submitting.');
                         return;
                     }
 
@@ -583,7 +586,7 @@ const { createApp } = Vue;
                     } else if (this.applicationCoverLetter.mode === 'write') {
                         formData.append('cover_letter_text', this.applicationCoverLetter.text);
                     }
-                    formData.append('employer_question_answer', this.applicationAnswer);
+                    formData.append('answers', JSON.stringify(this.applicationAnswers));
 
                     try {
                         const res = await fetch('home?action=apply', {
@@ -613,7 +616,7 @@ const { createApp } = Vue;
                             this.applicationExperience = null;
                             this.applicationResume = null;
                             this.applicationCoverLetter = { mode: 'skip', file: null, file_name: '', text: '' };
-                            this.applicationAnswer = '';
+                            this.applicationAnswers = {};
                         } else {
                             this.addNotification('error', 'Error', data.message || 'Failed to submit application');
                         }
@@ -678,7 +681,7 @@ const { createApp } = Vue;
                     this.applicationExperience = null;
                     this.applicationResume = null;
                     this.applicationCoverLetter = { mode: 'skip', file: null, file_name: '', text: '' };
-                    this.applicationAnswer = '';
+                    this.applicationAnswers = {};
                 },
                 nextStep() {
                     this.applicationStep++;
@@ -721,9 +724,7 @@ const { createApp } = Vue;
                                 application_status: job.application_status || 'Pending',
                                 cover_letter_text: job.cover_letter_text || '',
                                 cover_letter_file: job.cover_letter_file || '',
-                                application_answer: job.application_answer || '',
-                                employer_question: job.employer_question || '',
-                                employer_question_required: job.employer_question_required,
+                                answers: job.answers || [],
                                 companyDetails: {
                                     company_logo: job.company_logo || '',
                                     company_name: job.company_name || '',
@@ -755,8 +756,7 @@ const { createApp } = Vue;
                                 fullDescription: job.fullDescription || job.description,
                                 requirements: job.requirements ? job.requirements.split('\n') : [],
                                 qualifications: job.qualifications ? job.qualifications.split('\n') : [],
-                                employer_question: job.employer_question || '',
-                                employer_question_required: job.employer_question_required,
+                                questions: Array.isArray(job.questions) ? job.questions : [],
                                 aboutCompany: job.aboutCompany || '',
                                 savedDate: job.savedDate || '',
                                 postedDate: job.postedDate || '',
@@ -853,7 +853,7 @@ const { createApp } = Vue;
             },
             computed: {
                 totalApplicationSteps() {
-                    return this.selectedJob && this.selectedJob.employer_question ? 7 : 6;
+                    return this.selectedJob && this.selectedJob.questions && this.selectedJob.questions.length ? 7 : 6;
                 },
                 paginatedAppliedJobs() {
                     const start = (this.currentPageApplied - 1) * this.itemsPerPage;

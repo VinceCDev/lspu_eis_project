@@ -66,7 +66,7 @@ class Applicant
         return $this->attachCertifications($rows);
     }
 
-    /** Attaches each row's work experience, education, skills, and certifications. */
+    /** Attaches each row's work experience, education, skills, certifications, and Q&A answers. */
     private function attachCertifications(array $rows): array
     {
         if (empty($rows)) {
@@ -80,6 +80,7 @@ class Applicant
         $educations = $this->groupedByAlumni("SELECT alumni_id, education_id, degree, school, start_date, end_date, current FROM alumni_education WHERE alumni_id IN ($placeholders) ORDER BY start_date DESC", $alumniIds);
         $skills = $this->groupedByAlumni("SELECT alumni_id, skill_id, name, certificate, certificate_file FROM alumni_skill WHERE alumni_id IN ($placeholders)", $alumniIds);
         $certifications = $this->groupedByAlumni("SELECT alumni_id, certification_id, name, issuer, issue_date, certificate_file FROM alumni_certification WHERE alumni_id IN ($placeholders) ORDER BY issue_date DESC", $alumniIds);
+        $answersByApplication = (new Application())->answersForApplications(array_map(static fn ($r) => (int) $r['application_id'], $rows));
 
         foreach ($rows as &$row) {
             $alumniId = (int) $row['alumni_id'];
@@ -87,6 +88,7 @@ class Applicant
             $row['educations'] = $educations[$alumniId] ?? [];
             $row['skills'] = $skills[$alumniId] ?? [];
             $row['certifications'] = $certifications[$alumniId] ?? [];
+            $row['answers'] = $answersByApplication[(int) $row['application_id']] ?? [];
         }
 
         return $rows;

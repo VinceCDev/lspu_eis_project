@@ -15,10 +15,15 @@ class Application
         return $this->selectOne('SELECT application_id FROM applications WHERE alumni_id = ? AND job_id = ?', [$alumniId, $jobId]) !== null;
     }
 
-    public function createForAlumni(int $alumniId, int $jobId, ?string $coverLetterText = null, ?string $coverLetterFile = null, ?string $applicationAnswer = null): bool
+    /**
+     * @param array<int, string> $answers job_question_id => answer text.
+     *        $applicationAnswer is kept only for the single-question legacy
+     *        column, mirrored from answers[0] by the caller if present.
+     */
+    public function createForAlumni(int $alumniId, int $jobId, ?string $coverLetterText = null, ?string $coverLetterFile = null, ?string $applicationAnswer = null, array $answers = []): bool
     {
         try {
-            return $this->insert('INSERT INTO applications (alumni_id, job_id, cover_letter_text, cover_letter_file, application_answer) VALUES (?, ?, ?, ?, ?)', [$alumniId, $jobId, $coverLetterText, $coverLetterFile, $applicationAnswer]);
+            $applicationId = $this->insertGetId('INSERT INTO applications (alumni_id, job_id, cover_letter_text, cover_letter_file, application_answer) VALUES (?, ?, ?, ?, ?)', [$alumniId, $jobId, $coverLetterText, $coverLetterFile, $applicationAnswer]);
         } catch (QueryException $e) {
             // Duplicate (alumni_id, job_id) — existsForAlumniJob() in the
             // caller already handles the normal "already applied" case;
@@ -27,11 +32,73 @@ class Application
             // constraint is the actual DB-level guarantee against.
             return false;
         }
+
+        foreach ($answers as $questionId => $answerText) {
+            $answerText = trim((string) $answerText);
+            if ($answerText === '') {
+                continue;
+            }
+            $this->insert('INSERT INTO application_answers (application_id, job_question_id, answer_text) VALUES (?, ?, ?)', [
+                $applicationId, (int) $questionId, $answerText,
+            ]);
+        }
+
+        return true;
+    }
+
+    /** @return array<int, array{question_id: int, question_text: string, is_required: bool, answer_text: string}> */
+    public function answersForApplication(int $applicationId): array
+    {
+        $rows = $this->selectAll('SELECT jq.id AS question_id, jq.question_text, jq.is_required, aa.answer_text
+            FROM application_answers aa
+            JOIN job_questions jq ON aa.job_question_id = jq.id
+            WHERE aa.application_id = ?
+            ORDER BY jq.sort_order ASC', [$applicationId]);
+
+        return array_map(static fn (array $r) => [
+            'question_id' => (int) $r['question_id'],
+            'question_text' => $r['question_text'],
+            'is_required' => (bool) $r['is_required'],
+            'answer_text' => $r['answer_text'],
+        ], $rows);
+    }
+
+    /**
+     * Batch-fetches answers for many applications at once, grouped by
+     * application_id — for attaching to a list without one query per row.
+     *
+     * @param int[] $applicationIds
+     * @return array<int, array<int, array{question_id: int, question_text: string, is_required: bool, answer_text: string}>>
+     */
+    public function answersForApplications(array $applicationIds): array
+    {
+        if ($applicationIds === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($applicationIds), '?'));
+        $rows = $this->selectAll("SELECT aa.application_id, jq.id AS question_id, jq.question_text, jq.is_required, aa.answer_text
+            FROM application_answers aa
+            JOIN job_questions jq ON aa.job_question_id = jq.id
+            WHERE aa.application_id IN ($placeholders)
+            ORDER BY aa.application_id ASC, jq.sort_order ASC", $applicationIds);
+
+        $grouped = [];
+        foreach ($rows as $r) {
+            $grouped[(int) $r['application_id']][] = [
+                'question_id' => (int) $r['question_id'],
+                'question_text' => $r['question_text'],
+                'is_required' => (bool) $r['is_required'],
+                'answer_text' => $r['answer_text'],
+            ];
+        }
+
+        return $grouped;
     }
 
     public function appliedJobsForAlumni(int $alumniId): array
     {
-        $jobs = $this->selectAll('SELECT app.job_id, app.applied_at, app.status AS application_status,
+        $jobs = $this->selectAll('SELECT app.application_id, app.job_id, app.applied_at, app.status AS application_status,
                    app.cover_letter_text, app.cover_letter_file, app.application_answer,
                    j.title, j.type, j.location, j.salary, j.status, j.created_at, j.description,
                    j.requirements, j.qualifications, j.employer_question, j.employer_question_required, j.employer_id
@@ -41,6 +108,12 @@ class Application
         if (empty($jobs)) {
             return [];
         }
+
+        $answersByApplication = $this->answersForApplications(array_map(static fn ($j) => (int) $j['application_id'], $jobs));
+        foreach ($jobs as &$job) {
+            $job['answers'] = $answersByApplication[(int) $job['application_id']] ?? [];
+        }
+        unset($job);
 
         $employerIds = array_values(array_unique(array_filter(array_map(fn ($j) => (int) $j['employer_id'], $jobs))));
         $companies = [];
@@ -162,6 +235,12 @@ class Application
             $row['educations'] = $educations[$alumniId] ?? [];
             $row['skills'] = $skills[$alumniId] ?? [];
             $row['certifications'] = $certifications[$alumniId] ?? [];
+        }
+        unset($row);
+
+        $answersByApplication = $this->answersForApplications(array_map(static fn ($r) => (int) $r['application_id'], $applications));
+        foreach ($applications as &$row) {
+            $row['answers'] = $answersByApplication[(int) $row['application_id']] ?? [];
         }
 
         return $applications;

@@ -93,32 +93,34 @@
                                     </td>
                                     <td class="px-4 py-3 text-center">
                                         <div class="relative inline-block text-left">
-                                            <button @click="toggleActionDropdown(interview.interview_id)" class="p-2 rounded focus:outline-none transition-colors"
+                                            <button @click="toggleActionDropdown(interview.interview_id, $event)" class="p-2 rounded focus:outline-none transition-colors"
                                                 :class="darkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-200'">
                                                 <i class="fas fa-ellipsis-h"></i>
                                             </button>
-                                            <div v-if="actionDropdown === interview.interview_id" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-10">
-                                                <div class="py-1" @click="actionDropdown = null">
-                                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-200" @click.prevent="viewInterview(interview)">
-                                                        <i class="fas fa-eye mr-2"></i> View Details
-                                                    </a>
-                                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors duration-200" @click.prevent="editInterview(interview)" v-if="interview.status === 'Scheduled'">
-                                                        <i class="fas fa-edit mr-2"></i> Reschedule
-                                                    </a>
-                                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors duration-200" @click.prevent="markAsComplete(interview)" v-if="interview.status === 'Scheduled'">
-                                                        <i class="fas fa-check-circle mr-2"></i> Mark Complete
-                                                    </a>
-                                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors duration-200" @click.prevent="confirmCancel(interview)" v-if="interview.status === 'Scheduled'">
-                                                        <i class="fas fa-times-circle mr-2"></i> Cancel
-                                                    </a>
-                                                    <a v-if="interview.alumni && interview.alumni.resume_file" :href="interview.alumni.resume_file" download class="block px-4 py-2 text-sm text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-colors duration-200">
-                                                        <i class="fas fa-download mr-2"></i> Download Resume
-                                                    </a>
-                                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors duration-200" @click.prevent="sendReminder(interview)" v-if="interview.status === 'Scheduled'">
-                                                        <i class="fas fa-bell mr-2"></i> Send Reminder
-                                                    </a>
+                                            <teleport to="body">
+                                                <div v-if="actionDropdown === interview.interview_id" class="teleported-action-dropdown fixed w-48 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-[300]" :style="{ top: dropdownPosition.top + 'px', left: dropdownPosition.left + 'px' }">
+                                                    <div class="py-1" @click="actionDropdown = null">
+                                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors duration-200" @click.prevent="viewInterview(interview)">
+                                                            <i class="fas fa-eye mr-2"></i> View Details
+                                                        </a>
+                                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors duration-200" @click.prevent="editInterview(interview)" v-if="interview.status === 'Scheduled'">
+                                                            <i class="fas fa-edit mr-2"></i> Reschedule
+                                                        </a>
+                                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors duration-200" @click.prevent="markAsComplete(interview)" v-if="interview.status === 'Scheduled'">
+                                                            <i class="fas fa-check-circle mr-2"></i> Mark Complete
+                                                        </a>
+                                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors duration-200" @click.prevent="confirmCancel(interview)" v-if="interview.status === 'Scheduled'">
+                                                            <i class="fas fa-times-circle mr-2"></i> Cancel
+                                                        </a>
+                                                        <a v-if="interview.alumni && interview.alumni.resume_file" :href="interview.alumni.resume_file" download class="block px-4 py-2 text-sm text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-colors duration-200">
+                                                            <i class="fas fa-download mr-2"></i> Download Resume
+                                                        </a>
+                                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors duration-200" @click.prevent="sendReminder(interview)" v-if="interview.status === 'Scheduled'">
+                                                            <i class="fas fa-bell mr-2"></i> Send Reminder
+                                                        </a>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            </teleport>
                                         </div>
                                     </td>
                                 </tr>

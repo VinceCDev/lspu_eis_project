@@ -29,7 +29,6 @@ const { createApp } = Vue;
                 editForm: {},
                 showPhotoModal: false,
                 newLogoPreview: null,
-                showLogoModal: false,
                 showDeleteLogoModal: false,
                 newLogoFile: null,
                 showDocumentModal: false,
@@ -165,39 +164,6 @@ const { createApp } = Vue;
                 this.showPhotoModal = true;
                 this.newLogoPreview = null;
             },
-            handleLogoUpload(event) {
-                const file = event.target.files[0];
-                if (file) {
-                    this.newLogoPreview = URL.createObjectURL(file);
-                    this.editForm.company_logo = file;
-                }
-            },
-            handleDocumentUpload(event) {
-                const file = event.target.files[0];
-                if (file) {
-                    this.newDocumentFile = file;
-                    this.newDocumentName = file.name;
-                    const ext = file.name.split('.').pop().toLowerCase();
-                    if (ext === 'pdf') {
-                        this.newDocumentPreview = URL.createObjectURL(file);
-                    } else if (["jpg","jpeg","png","gif","bmp","webp"].includes(ext)) {
-                        const reader = new FileReader();
-                        reader.onload = (ev) => { this.newDocumentPreview = ev.target.result; };
-                        reader.readAsDataURL(file);
-                    } else {
-                        this.newDocumentPreview = null;
-                    }
-                }
-            },
-            saveLogo() {
-                if (this.newLogoPreview) {
-                    this.profile.company_logo = this.newLogoPreview;
-                    this.showNotification('Company logo updated successfully!', 'success');
-                    this.closePhotoModal();
-                } else {
-                    this.showNotification('Please select a new logo to update.', 'info');
-                }
-            },
             closePhotoModal() {
                 this.showPhotoModal = false;
                 this.newLogoPreview = null;
@@ -221,7 +187,7 @@ const { createApp } = Vue;
                 .then(data => {
                     if (data.success) {
                         this.showNotification('Logo updated!', 'success');
-                        this.showLogoModal = false;
+                        this.showPhotoModal = false;
                         this.newLogoFile = null;
                         this.newLogoPreview = null;
                         this.refreshProfile();
@@ -257,6 +223,16 @@ const { createApp } = Vue;
                 if (file) {
                     this.newDocumentFile = file;
                     this.newDocumentName = file.name;
+                    const ext = file.name.split('.').pop().toLowerCase();
+                    if (ext === 'pdf') {
+                        this.newDocumentPreview = URL.createObjectURL(file);
+                    } else if (["jpg","jpeg","png","gif","bmp","webp"].includes(ext)) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => { this.newDocumentPreview = ev.target.result; };
+                        reader.readAsDataURL(file);
+                    } else {
+                        this.newDocumentPreview = null;
+                    }
                 }
             },
             saveDocument() {

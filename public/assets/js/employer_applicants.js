@@ -19,6 +19,7 @@ createApp({
             showDeleteModal: false,
             applicantToDelete: null,
             actionDropdown: null,
+            dropdownPosition: { top: 0, left: 0 },
             filters: {
                 status: '',
                 appliedFor: '',
@@ -156,11 +157,27 @@ createApp({
                 document.body.classList.remove('dark');
             }
         },
-        toggleActionDropdown(id) {
-            this.actionDropdown = this.actionDropdown === id ? null : id;
+        toggleActionDropdown(id, event) {
+            if (this.actionDropdown === id) {
+                this.actionDropdown = null;
+                return;
+            }
+            this.actionDropdown = id;
+            // The menu is teleported to <body> (see the template) so the
+            // table's own overflow-x-auto — which, per the CSS spec, also
+            // clips the Y axis the moment X isn't "visible" — can't cut it
+            // off or force a scroll to see the rest of it. Since it's no
+            // longer a descendant of the button, position it manually from
+            // the button's own on-screen location instead of relying on
+            // absolute positioning within a relative ancestor.
+            this.$nextTick(() => {
+                const btn = event.currentTarget;
+                const rect = btn.getBoundingClientRect();
+                this.dropdownPosition = { top: rect.bottom + 4, left: rect.right - 160 };
+            });
         },
         handleClickOutsideDropdown(event) {
-            if (this.actionDropdown !== null && !event.target.closest('.relative.inline-block.text-left')) {
+            if (this.actionDropdown !== null && !event.target.closest('.relative.inline-block.text-left') && !event.target.closest('.teleported-action-dropdown')) {
                 this.actionDropdown = null;
             }
         },

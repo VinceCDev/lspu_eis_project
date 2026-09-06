@@ -42,12 +42,15 @@ class SavedJob
             }
         }
 
+        $questionsByJob = (new Job())->questionsByJobIds($jobIds);
+
         $savedJobs = [];
         foreach ($jobs as $job) {
             $companyDetails = $companies[(int) $job['employer_id']] ?? [];
             $job['savedDate'] = $saved[(int) $job['job_id']] ?? null;
             $job['company_name'] = $companyDetails['company_name'] ?? '';
             $job['companyDetails'] = $companyDetails;
+            $job['questions'] = $questionsByJob[(int) $job['job_id']] ?? [];
             $savedJobs[] = $job;
         }
 

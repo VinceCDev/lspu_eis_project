@@ -62,10 +62,11 @@
                             class="w-24 h-24 sm:w-40 sm:h-40 rounded-full border-4 border-white dark:border-gray-300 shadow-lg bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-3xl text-gray-400 dark:text-gray-300">
                             <i class="fas fa-user"></i>
                         </div>
-                        <div class="absolute -bottom-1 -right-1 sm:-bottom-2 sm:-right-2 bg-blue-600 text-white rounded-full p-1.5 sm:p-2 cursor-pointer hover:bg-blue-700 transition-colors"
-                            @click="openPhotoModal">
-                            <i class="fas fa-camera text-xs sm:text-sm"></i>
-                        </div>
+                        <button type="button"
+                            class="absolute -bottom-1 -right-1 sm:-bottom-2 sm:-right-2 bg-blue-600 text-white rounded-full p-1.5 sm:p-2 cursor-pointer hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                            @click="openPhotoModal" aria-label="Change profile photo">
+                            <i class="fas fa-camera text-xs sm:text-sm" aria-hidden="true"></i>
+                        </button>
                     </div>
                     <div class="mb-4 sm:mb-6 w-full">
                         <h1 class="text-2xl sm:text-4xl font-bold text-white mb-2 drop-shadow-lg">{{ profile.name }}
@@ -1210,20 +1211,17 @@
                             </div>
                         </div>
                     </div>
-                    <div class="flex justify-end gap-3 mt-6 flex-nowrap overflow-x-auto">
-                        <button @click="closePhotoModal"
-                            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap flex-shrink-0">Cancel</button>
+                    <div class="flex gap-3 mt-6">
                         <button v-if="profilePicData.file_name" @click="openDeleteProfilePicModal"
-                            class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 whitespace-nowrap flex-shrink-0">Delete
+                            class="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 whitespace-nowrap">Delete
                             Photo</button>
-                        <!-- Change Photo button only if a profile picture exists -->
-                        <button v-if="profilePicData.file_name" @click="$refs.photoInput.click()"
-                            class="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 whitespace-nowrap flex-shrink-0">Change
-                            Photo</button>
-                        <!-- Save button only enabled if a file is selected -->
+                        <!-- Save button only enabled if a file is selected; reads
+                             "Update Photo" once there's already a photo to replace. -->
                         <button @click="saveProfilePic" :disabled="!newPhotoFile"
-                            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex-shrink-0">Save
-                            Photo</button>
+                            class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
+                            <span v-if="profilePicData.file_name">Update Photo</span>
+                            <span v-else>Save Photo</span>
+                        </button>
                     </div>
                 </div>
             </div>

@@ -983,12 +983,20 @@ const { createApp } = Vue;
                     const degreeInput = document.getElementById("degreeInput");
                     const suggestionsContainer = document.getElementById("degreeSuggestions");
                     
+                    degreeInput.addEventListener("input", () => {
+                        // Replacing the DOM node above (to clear old listeners)
+                        // detaches Vue's v-model from this input — without this,
+                        // typing a degree and never clicking a suggestion left
+                        // this.degreeInput empty, so saveEducation() sent a blank
+                        // degree and the server rejected the whole submission.
+                        this.degreeInput = degreeInput.value;
+                    });
                     degreeInput.addEventListener("input", this.debounce(async () => {
                         const query = degreeInput.value.trim();
                         suggestionsContainer.innerHTML = "";
-                        
+
                         if (!query) return;
-                        
+
                         const results = await this.fetchDegrees(query);
                         
                         // Add null/undefined check before calling slice
@@ -1032,6 +1040,7 @@ const { createApp } = Vue;
                                 this.showNotification('Skill added!', 'success');
                                 this.fetchSkills();
                                 this.newSkill = { name: '' };
+                                this.closeSkillsModal();
                             } else {
                                 this.showNotification(data.message || 'Failed to add skill.', 'error');
                             }
@@ -1411,12 +1420,19 @@ const { createApp } = Vue;
                     const universityInput = document.getElementById("universityInput");
                     const suggestionsContainer = document.getElementById("suggestions");
                     
+                    universityInput.addEventListener("input", () => {
+                        // Same reasoning as initDegreeAutocomplete() above —
+                        // replacing this DOM node detaches Vue's v-model, so
+                        // typing a school and never clicking a suggestion left
+                        // this.schoolInput empty.
+                        this.schoolInput = universityInput.value;
+                    });
                     universityInput.addEventListener("input", this.debounce(async () => {
                         const query = universityInput.value.trim();
                         suggestionsContainer.innerHTML = "";
-                        
+
                         if (!query) return;
-                        
+
                         const results = await this.fetchUniversities(query);
                         
                         results.slice(0, 8).forEach(item => {

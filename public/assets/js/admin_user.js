@@ -29,6 +29,7 @@ const { createApp } = Vue;
                 currentPage: 1,
                 pageSize: 5,
                 actionDropdown: null, // For action dropdown
+                dropdownPosition: { top: 0, left: 0 },
                 showAdminModal: false,
                 adminModalMode: 'add', // 'add' or 'edit'
                 adminForm: {

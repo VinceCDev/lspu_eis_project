@@ -61,16 +61,18 @@
                     </td>
                     <td class="px-4 py-2">
                         <div class="relative inline-block text-left">
-                            <button @click="toggleActionDropdown(employer.user_id)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none text-gray-500 dark:text-gray-200">
+                            <button @click="toggleActionDropdown(employer.user_id, $event)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none text-gray-500 dark:text-gray-200">
                                 <i class="fas fa-ellipsis-h"></i>
                             </button>
-                            <div v-if="actionDropdown === employer.user_id" class="origin-top-right absolute right-0 mt-2 w-32 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-50 drop-shadow-lg">
-                                <div class="py-1" @click="actionDropdown = null">
-                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" @click.prevent="viewEmployer(employer)"><i class="fas fa-eye mr-2"></i>View</a>
-                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-green-600 hover:bg-green-100 dark:hover:bg-green-800" @click.prevent="approveEmployer(employer)"><i class="fas fa-check-circle mr-2"></i>Approve</a>
-                                    <a href="#" role="button" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-100 dark:hover:bg-red-800" @click.prevent="confirmDeleteModal(employer)"><i class="fas fa-trash-alt mr-2"></i>Delete</a>
+                            <teleport to="body">
+                                <div v-if="actionDropdown === employer.user_id" class="teleported-action-dropdown fixed w-32 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-[300] drop-shadow-lg" :style="{ top: dropdownPosition.top + 'px', left: dropdownPosition.left + 'px' }">
+                                    <div class="py-1" @click="actionDropdown = null">
+                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600" @click.prevent="viewEmployer(employer)"><i class="fas fa-eye mr-2"></i>View</a>
+                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-green-600 hover:bg-green-100 dark:hover:bg-green-800" @click.prevent="approveEmployer(employer)"><i class="fas fa-check-circle mr-2"></i>Approve</a>
+                                        <a href="#" role="button" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-100 dark:hover:bg-red-800" @click.prevent="confirmDeleteModal(employer)"><i class="fas fa-trash-alt mr-2"></i>Delete</a>
+                                    </div>
                                 </div>
-                            </div>
+                            </teleport>
                         </div>
                     </td>
                 </tr>

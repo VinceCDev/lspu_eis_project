@@ -162,13 +162,26 @@
                 </div>
             </div>
         </div>
-        <div class="flex justify-end gap-3 mt-6">
-            <button @click="closePhotoModal" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">
-                Cancel
+        <div class="flex gap-3 mt-6">
+            <button v-if="profile.profile_pic" @click="confirmDeletePhoto" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 whitespace-nowrap">
+                Delete Photo
             </button>
-            <button @click="savePhoto" :disabled="!newPhotoPreview" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                Update Photo
+            <button @click="savePhoto" :disabled="!newPhotoPreview" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
+                <span v-if="profile.profile_pic">Update Photo</span>
+                <span v-else>Save Photo</span>
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Photo Confirmation Modal -->
+<div v-if="showDeletePhotoModal" class="fixed inset-0 z-[210] flex items-center justify-center bg-black bg-opacity-50" role="dialog" aria-modal="true">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-md mx-2 p-6 relative">
+        <h3 class="text-lg font-bold mb-4 text-gray-800 dark:text-gray-100">Confirm Delete</h3>
+        <p class="mb-6 text-gray-700 dark:text-gray-200">Are you sure you want to delete this photo?</p>
+        <div class="flex gap-3">
+            <button @click="showDeletePhotoModal = false" class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">Cancel</button>
+            <button @click="deletePhoto" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Delete</button>
         </div>
     </div>
 </div>

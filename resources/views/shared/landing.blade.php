@@ -67,7 +67,7 @@
 <body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
     <div id="app">
         <!-- Toast Notifications -->
-        <div class="fixed top-4 right-4 z-[100] space-y-3 w-full max-w-xs" aria-live="polite">
+        <div class="fixed top-4 right-4 z-[9999] space-y-3 w-full max-w-xs" aria-live="polite">
             <transition-group 
                 enter-active-class="transform transition duration-300 ease-out"
                 enter-from-class="translate-x-20 opacity-0"
