@@ -13,6 +13,7 @@ use App\Services\MailService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Session;
 
 /** Ported from backend/Controllers/Admin/AlumniController.php. */
 class AlumniController extends Controller
@@ -284,6 +285,14 @@ class AlumniController extends Controller
         $token = preg_replace('/[^A-Za-z0-9_]/', '', (string) $request->input('import_token', ''));
         $token = $token !== '' ? substr($token, 0, 64) : null;
 
+        // Release the file-session lock now — the import runs for many seconds
+        // and the frontend's importProgress polls (same session) would block
+        // behind it, so the bar would never move until the import finished.
+        if (Session::isStarted()) {
+            Session::save();
+        }
+        @set_time_limit(600);
+
         try {
             $summary = (new EmploymentReportImporter())->import($tmp, $campusId, $year, $token);
 
@@ -322,6 +331,12 @@ class AlumniController extends Controller
     /** Live progress for an in-flight employment-report import (polled by the frontend). */
     public function importProgress(Request $request): JsonResponse
     {
+        // Drop the session lock immediately so rapid polls never queue behind
+        // each other (or behind the import request).
+        if (Session::isStarted()) {
+            Session::save();
+        }
+
         $token = preg_replace('/[^A-Za-z0-9_]/', '', (string) $request->query('token', ''));
         if ($token === '') {
             return response()->json(['phase' => 'unknown', 'done' => 0, 'total' => 0]);
