@@ -33,6 +33,16 @@
     }
 
     global.LibLoader = {
+        // Chart.js + Leaflet are lazy-loaded so the dashboard shell/icons
+        // render without waiting for ~350 KB of visualization JS.
+        ensureChart: function () {
+            if (global.Chart) return Promise.resolve();
+            return loadScript('/assets/vendor/chartjs/chart.min.js');
+        },
+        ensureLeaflet: function () {
+            if (global.L) return Promise.resolve();
+            return loadScript('/assets/vendor/leaflet/leaflet.js');
+        },
         ensureXLSX: function () {
             if (global.XLSX) return Promise.resolve();
             return loadScript('/assets/vendor/xlsx/xlsx.full.min.js');

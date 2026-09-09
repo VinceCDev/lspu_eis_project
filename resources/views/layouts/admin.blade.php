@@ -16,6 +16,12 @@ $active = $active ?? '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($title); ?></title>
     <link rel="icon" type="image/png" href="<?php echo asset('assets/images/logo.png'); ?>">
+    <?php /* Start the solid-icon webfont download in parallel with the CSS
+             (it is otherwise only discovered after all.min.css parses, which
+             left every fas/fa- icon blank for the font's download time).
+             Only fa-solid-900 is preloaded — every above-the-fold icon in
+             the sidebar/header is `fas`; brands/regular are not. */ ?>
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="<?php echo asset('assets/vendor/fontawesome/webfonts/fa-solid-900.woff2'); ?>">
     <link rel="stylesheet" href="<?php echo asset('assets/vendor/fontawesome/css/all.min.css'); ?>">
     <link rel="stylesheet" href="<?php echo asset('assets/vendor/tailwind/tailwind.css'); ?>">
     <?php if (!empty($pageCss)) { ?>
@@ -37,11 +43,13 @@ $active = $active ?? '';
 
     <?php App\Core\View::partial('shared/footer'); ?>
 
-    <script src="<?php echo asset('assets/vendor/vue/vue.global.prod.js'); ?>"></script>
-    <script src="<?php echo asset('assets/js/lib-loader.js'); ?>"></script>
+    <?php /* defer: don't block HTML parsing; still execute in order
+             (vue -> lib-loader -> page script) before DOMContentLoaded. */ ?>
+    <script defer src="<?php echo asset('assets/vendor/vue/vue.global.prod.js'); ?>"></script>
+    <script defer src="<?php echo asset('assets/js/lib-loader.js'); ?>"></script>
     <?php echo $extraScripts ?? ''; ?>
     <?php if (!empty($pageJs)) { ?>
-    <script src="<?php echo asset('assets/js/'.$pageJs); ?>"></script>
+    <script defer src="<?php echo asset('assets/js/'.$pageJs); ?>"></script>
     <?php } ?>
 </body>
 </html>

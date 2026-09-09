@@ -59,6 +59,10 @@ createApp({
     mounted() {
         this.applyDarkMode();
         document.addEventListener('click', this.handleClickOutsideProfile);
+        // Kick off the visualization libs now (not render-blocking) so they
+        // download in parallel with the data fetches below; the render
+        // methods await these same (cached) promises before drawing.
+        if (window.LibLoader) { LibLoader.ensureChart(); LibLoader.ensureLeaflet(); }
         // Fetch dashboard stats and then initialize charts and map
         fetch('/admin_dashboard?action=stats')
             .then(res => res.json())
@@ -204,7 +208,8 @@ createApp({
             this.showEmploymentStatusModal = false;
             this.selectedCampusForChart = null;
         },
-        renderAlignmentChart() {
+        async renderAlignmentChart() {
+            if (window.LibLoader) { await LibLoader.ensureChart(); }
             const alignmentCtx = document.getElementById('alignmentChart');
             if (!alignmentCtx || !this.dashboardStats || !this.dashboardStats.course_work_alignment) return;
 
@@ -257,7 +262,8 @@ createApp({
                 }
             });
         },
-        renderCampusEmploymentChart(campus) {
+        async renderCampusEmploymentChart(campus) {
+            if (window.LibLoader) { await LibLoader.ensureChart(); }
             const canvas = document.getElementById('employmentStatusCampusChart_' + campus.campus_id);
             if (!canvas) return;
 
@@ -295,8 +301,9 @@ createApp({
                 }
             });
         },
-        initCharts() {
+        async initCharts() {
             if (this.chartInitialized) return;
+            if (window.LibLoader) { await LibLoader.ensureChart(); }
             const textColor = this.darkMode ? '#e5e7eb' : '#374151';
             const gridColor = this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
             try {
@@ -430,6 +437,7 @@ createApp({
         },
         async initMap() {
             try {
+                if (window.LibLoader) { await LibLoader.ensureLeaflet(); }
                 const map = L.map('alumniMap').setView([14.1667, 121.2167], 10);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '&copy; OpenStreetMap contributors'
@@ -696,8 +704,9 @@ createApp({
             this.charts.drilldown = null;
           }
         },
-        renderDrilldownChart() {
+        async renderDrilldownChart() {
           if (!this.drilldown.active) return;
+          if (window.LibLoader) { await LibLoader.ensureChart(); }
           const ctx = document.getElementById('drilldownChart');
           if (ctx) {
             if (this.charts.drilldown) this.charts.drilldown.destroy();

@@ -23,9 +23,12 @@ class DashboardController extends Controller
             'active' => Auth::role() === 'superadmin' ? 'superadmin_dashboard' : 'admin_dashboard',
             'pageJs' => 'admin_dashboard.js',
             'extraHead' => '<link rel="stylesheet" href="'.asset('assets/vendor/leaflet/leaflet.css').'">',
-            'extraScripts' => '<script src="'.asset('assets/vendor/leaflet/leaflet.js').'"></script>'
-                .'<script src="'.asset('assets/vendor/chartjs/chart.min.js').'"></script>'
-                .'<script>window.IS_SUPERADMIN = '.json_encode(Auth::role() === 'superadmin').';</script>',
+            // Chart.js (~200 KB) and Leaflet (~148 KB) are NOT needed to
+            // render the dashboard shell — they are lazy-loaded on demand by
+            // admin_dashboard.js (via LibLoader) once the stats/map data is
+            // ready, so the sidebar/header/icons paint without waiting for
+            // them. Only the tiny per-request flag is inlined here.
+            'extraScripts' => '<script>window.IS_SUPERADMIN = '.json_encode(Auth::role() === 'superadmin').';</script>',
         ]);
     }
 
