@@ -388,11 +388,20 @@ const { createApp } = Vue;
                 this.viewedAccount = account;
                 this.showViewModal = true;
             },
-            toggleActionDropdown(userId) {
-                this.actionDropdown = this.actionDropdown === userId ? null : userId;
+            toggleActionDropdown(userId, event) {
+                if (this.actionDropdown === userId) {
+                    this.actionDropdown = null;
+                    return;
+                }
+                this.actionDropdown = userId;
+                this.$nextTick(() => {
+                    const btn = event.currentTarget;
+                    const rect = btn.getBoundingClientRect();
+                    this.dropdownPosition = { top: rect.bottom + 4, left: rect.right - 128 };
+                });
             },
             handleClickOutsideDropdown(event) {
-                if (this.actionDropdown !== null && !event.target.closest('.relative.inline-block.text-left')) {
+                if (this.actionDropdown !== null && !event.target.closest('.relative.inline-block.text-left') && !event.target.closest('.teleported-action-dropdown')) {
                     this.actionDropdown = null;
                 }
             },
