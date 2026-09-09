@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Campus;
+use App\Models\SiteSetting;
 use App\Models\User;
 use App\Services\Auth;
 use App\Services\MailService;
@@ -105,26 +106,35 @@ class UserController extends Controller
             $recipientName = trim("$first $last");
         }
 
-        (new MailService())->send(
-            $email,
-            $recipientName,
-            'Your LSPU EIS Account Credentials',
-            MailService::wrap(
-                'Welcome, '.htmlspecialchars($recipientName).'!',
-                '<p>Your account has been created successfully.</p>'
-                    .'<div style="background:#f1f5f9;border-radius:8px;padding:16px 18px;margin:16px 0;">'
-                    ."<p style=\"margin:0 0 6px;\"><strong>Email:</strong> {$email}</p>"
-                    ."<p style=\"margin:0;\"><strong>Password:</strong> {$randomPassword}</p>"
-                    .'</div>'
-                    .'<p>For security, please change your password after your first login.</p>',
-                'Login to LSPU EIS',
-                config('app.url').'/login'
-            )
-        );
+        $credentialsEmailSent = false;
+        if ((new SiteSetting())->newAccountEmailEnabled()) {
+            (new MailService())->send(
+                $email,
+                $recipientName,
+                'Your LSPU EIS Account Credentials',
+                MailService::wrap(
+                    'Welcome, '.htmlspecialchars($recipientName).'!',
+                    '<p>Your account has been created successfully.</p>'
+                        .'<div style="background:#f1f5f9;border-radius:8px;padding:16px 18px;margin:16px 0;">'
+                        ."<p style=\"margin:0 0 6px;\"><strong>Email:</strong> {$email}</p>"
+                        ."<p style=\"margin:0;\"><strong>Password:</strong> {$randomPassword}</p>"
+                        .'</div>'
+                        .'<p>For security, please change your password after your first login.</p>',
+                    'Login to LSPU EIS',
+                    config('app.url').'/login'
+                )
+            );
+            $credentialsEmailSent = true;
+        }
 
         (new AuditLog())->log((int) Auth::user()['user_id'], Auth::user()['email'] ?? null, Auth::role(), 'create_account', $role, $userId, "Created {$role} account for {$recipientName}.");
 
-        return response()->json(['success' => true, 'message' => 'Account created successfully.']);
+        return response()->json([
+            'success' => true,
+            'message' => $credentialsEmailSent
+                ? 'Account created successfully. Credentials were emailed to the account holder.'
+                : "Account created successfully. Credential email is turned off — temporary password: {$randomPassword}",
+        ]);
     }
 
     public function update(Request $request): JsonResponse

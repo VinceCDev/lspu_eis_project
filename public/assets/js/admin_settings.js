@@ -35,6 +35,8 @@ createApp({
             twoFactorSaving: false,
             passwordPolicy: window.__passwordPolicy || { min_length: 10, require_uppercase: true, require_number: true, require_symbol: true },
             passwordPolicySaving: false,
+            newAccountEmailEnabled: window.__newAccountEmailEnabled ?? true,
+            newAccountEmailSaving: false,
             // Reminder Settings tab
             reminderSettings: {
                 business_hours_start: '9',
@@ -220,6 +222,30 @@ createApp({
                 this.showNotification('Failed to update two-factor authentication.', 'error');
             } finally {
                 this.twoFactorSaving = false;
+            }
+        },
+        async toggleNewAccountEmail(e) {
+            const desired = e.target.checked;
+            this.newAccountEmailSaving = true;
+            try {
+                const response = await fetch('/admin_settings?action=updateAccountNotify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: desired }),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    this.newAccountEmailEnabled = desired;
+                    this.showNotification(data.message, 'success');
+                } else {
+                    e.target.checked = this.newAccountEmailEnabled;
+                    this.showNotification(data.message || 'Failed to update setting.', 'error');
+                }
+            } catch (error) {
+                e.target.checked = this.newAccountEmailEnabled;
+                this.showNotification('Failed to update setting.', 'error');
+            } finally {
+                this.newAccountEmailSaving = false;
             }
         },
         async savePasswordPolicy() {

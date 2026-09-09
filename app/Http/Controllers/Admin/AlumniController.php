@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Alumni;
 use App\Models\AuditLog;
+use App\Models\SiteSetting;
 use App\Models\User;
 use App\Services\Auth;
 use App\Services\MailService;
@@ -286,24 +287,33 @@ class AlumniController extends Controller
             'campus_id' => $campusId,
         ], '');
 
-        (new MailService())->send(
-            $data['email'],
-            $data['first_name'].' '.$data['last_name'],
-            'Your LSPU EIS Alumni Account',
-            MailService::wrap(
-                'Welcome, '.htmlspecialchars($data['first_name']).'!',
-                '<p>Your alumni account has been created by the administrator and is already active.</p>'
-                    .'<div style="background:#f1f5f9;border-radius:8px;padding:16px 18px;margin:16px 0;">'
-                    ."<p style=\"margin:0 0 6px;\"><strong>Email:</strong> {$data['email']}</p>"
-                    ."<p style=\"margin:0;\"><strong>Password:</strong> {$randomPassword}</p>"
-                    .'</div>'
-                    .'<p>For security, please change your password after logging in.</p>',
-                'Login to LSPU EIS',
-                config('app.url').'/login'
-            )
-        );
+        $credentialsEmailSent = false;
+        if ((new SiteSetting())->newAccountEmailEnabled()) {
+            (new MailService())->send(
+                $data['email'],
+                $data['first_name'].' '.$data['last_name'],
+                'Your LSPU EIS Alumni Account',
+                MailService::wrap(
+                    'Welcome, '.htmlspecialchars($data['first_name']).'!',
+                    '<p>Your alumni account has been created by the administrator and is already active.</p>'
+                        .'<div style="background:#f1f5f9;border-radius:8px;padding:16px 18px;margin:16px 0;">'
+                        ."<p style=\"margin:0 0 6px;\"><strong>Email:</strong> {$data['email']}</p>"
+                        ."<p style=\"margin:0;\"><strong>Password:</strong> {$randomPassword}</p>"
+                        .'</div>'
+                        .'<p>For security, please change your password after logging in.</p>',
+                    'Login to LSPU EIS',
+                    config('app.url').'/login'
+                )
+            );
+            $credentialsEmailSent = true;
+        }
 
-        return response()->json(['success' => true, 'message' => 'Alumni added and credentials sent via email.']);
+        return response()->json([
+            'success' => true,
+            'message' => $credentialsEmailSent
+                ? 'Alumni added and credentials sent via email.'
+                : "Alumni added. Credential email is turned off — temporary password: {$randomPassword}",
+        ]);
     }
 
     private function update(array $data): JsonResponse

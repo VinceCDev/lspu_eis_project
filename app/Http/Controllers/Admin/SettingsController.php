@@ -43,6 +43,7 @@ class SettingsController extends Controller
             $data['recentStats'] = $reminderModel->recentStatistics();
             $data['recentLogs'] = $reminderModel->recentLogs();
             $data['heroSettings'] = $siteSettingModel->all();
+            $data['newAccountEmailEnabled'] = $siteSettingModel->newAccountEmailEnabled();
         }
 
         return view('admin.settings', $data);
@@ -65,6 +66,38 @@ class SettingsController extends Controller
         (new AuditLog())->log($userId, Auth::user()['email'] ?? null, Auth::role(), 'update_password_policy', 'site_settings', null, 'Updated the admin/superadmin password requirements.');
 
         return response()->json(['success' => true, 'message' => 'Password requirements updated.']);
+    }
+
+    /** Superadmin-only: toggle the automatic credentials email for new accounts. */
+    public function updateAccountNotify(Request $request): JsonResponse
+    {
+        if (Auth::role() !== 'superadmin') {
+            return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
+        }
+
+        $enabled = in_array($request->input('enabled'), [1, '1', true, 'true'], true);
+
+        (new SiteSetting())->save(['notify_new_account_email' => $enabled ? '1' : '0']);
+
+        $userId = (int) Auth::user()['user_id'];
+        (new AuditLog())->log(
+            $userId,
+            Auth::user()['email'] ?? null,
+            Auth::role(),
+            'update_account_notify',
+            'site_settings',
+            null,
+            $enabled
+                ? 'Enabled the credentials email for newly created accounts.'
+                : 'Disabled the credentials email for newly created accounts.'
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => $enabled
+                ? 'New accounts will now receive a credentials email.'
+                : 'New accounts will no longer receive a credentials email.',
+        ]);
     }
 
     private function passwordRequirementsText(array $policy): string

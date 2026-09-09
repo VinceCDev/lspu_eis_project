@@ -18,7 +18,16 @@ class SiteSetting
         'password_require_uppercase' => '1',
         'password_require_number' => '1',
         'password_require_symbol' => '1',
+        // When '1', a credentials email is sent to every new alumni /
+        // employer / admin account created from the Accounts page.
+        'notify_new_account_email' => '1',
     ];
+
+    /** Whether new-account credential emails should be sent (superadmin toggle). */
+    public function newAccountEmailEnabled(): bool
+    {
+        return ($this->all()['notify_new_account_email'] ?? '1') === '1';
+    }
 
     /** Admin/superadmin password policy, cast to the types callers actually need. */
     public function passwordPolicy(): array

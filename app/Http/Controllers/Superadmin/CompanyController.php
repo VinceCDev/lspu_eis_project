@@ -7,6 +7,7 @@ use App\Core\Uploader;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Employer;
+use App\Models\SiteSetting;
 use App\Models\User;
 use App\Services\Auth;
 use App\Services\MailService;
@@ -228,23 +229,32 @@ class CompanyController extends Controller
             'document_file' => $documentFile,
         ]);
 
-        (new MailService())->send(
-            $data['email'],
-            $data['company_name'],
-            'Your Employer Account for LSPU EIS',
-            MailService::wrap(
-                'Welcome, '.htmlspecialchars($data['company_name']).'!',
-                '<p>Your employer account has been created by the administrator.</p>'
-                    .'<div style="background:#f1f5f9;border-radius:8px;padding:16px 18px;margin:16px 0;">'
-                    ."<p style=\"margin:0 0 6px;\"><strong>Email:</strong> {$data['email']}</p>"
-                    ."<p style=\"margin:0;\"><strong>Password:</strong> {$randomPassword}</p>"
-                    .'</div>'
-                    .'<p>For security, please change your password after logging in.</p>',
-                'Login to LSPU EIS',
-                config('app.url').'/login'
-            )
-        );
+        $credentialsEmailSent = false;
+        if ((new SiteSetting())->newAccountEmailEnabled()) {
+            (new MailService())->send(
+                $data['email'],
+                $data['company_name'],
+                'Your Employer Account for LSPU EIS',
+                MailService::wrap(
+                    'Welcome, '.htmlspecialchars($data['company_name']).'!',
+                    '<p>Your employer account has been created by the administrator.</p>'
+                        .'<div style="background:#f1f5f9;border-radius:8px;padding:16px 18px;margin:16px 0;">'
+                        ."<p style=\"margin:0 0 6px;\"><strong>Email:</strong> {$data['email']}</p>"
+                        ."<p style=\"margin:0;\"><strong>Password:</strong> {$randomPassword}</p>"
+                        .'</div>'
+                        .'<p>For security, please change your password after logging in.</p>',
+                    'Login to LSPU EIS',
+                    config('app.url').'/login'
+                )
+            );
+            $credentialsEmailSent = true;
+        }
 
-        return response()->json(['success' => true, 'message' => 'Employer added and credentials sent via email.']);
+        return response()->json([
+            'success' => true,
+            'message' => $credentialsEmailSent
+                ? 'Employer added and credentials sent via email.'
+                : "Employer added. Credential email is turned off — temporary password: {$randomPassword}",
+        ]);
     }
 }

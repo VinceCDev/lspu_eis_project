@@ -9,6 +9,7 @@
     window.__passwordPolicy = <?= json_encode($passwordPolicy) ?>;
     <?php if ($isSuperadmin): ?>
     window.__heroSettings = <?= json_encode($heroSettings) ?>;
+    window.__newAccountEmailEnabled = <?= json_encode($newAccountEmailEnabled) ?>;
     <?php endif; ?>
 </script>
 
@@ -98,6 +99,20 @@
                 </button>
             </div>
         </form>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($isSuperadmin): ?>
+    <div class="bg-white dark:bg-gray-700 rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">New Account Emails</h2>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">When enabled, a credentials email is automatically sent to every new alumni, employer, or admin account created from the Accounts page. Turn this off if logins are handed out another way.</p>
+        <label class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-600 rounded cursor-pointer">
+            <span class="text-sm text-gray-700 dark:text-gray-300">
+                <i class="fas fa-envelope mr-2 text-blue-500"></i>
+                {{ newAccountEmailEnabled ? 'Enabled' : 'Disabled' }}
+            </span>
+            <input type="checkbox" :checked="newAccountEmailEnabled" @change="toggleNewAccountEmail" :disabled="newAccountEmailSaving" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 checked:bg-blue-600 checked:border-blue-600">
+        </label>
     </div>
     <?php endif; ?>
 
