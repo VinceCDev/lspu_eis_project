@@ -81,23 +81,35 @@ const { createApp } = Vue;
                     }
                 },
                 mounted() {
+                    // One controller for every request this page fires. Aborted on
+                    // navigate-away (pagehide) so the browser stops waiting on the
+                    // Reports endpoints and can start loading the next page
+                    // immediately — the report queries never block navigation.
+                    this._abort = new AbortController();
+                    this._onLeave = () => { try { this._abort.abort(); } catch (e) {} };
+                    window.addEventListener('pagehide', this._onLeave);
+
                     this.applyDarkMode();
                     document.addEventListener('click', this.handleClickOutsideProfile);
                     this.fetchCampuses();
                     this.fetchSummaryData();
                     this.fetchColleges();
                     this.fetchYears();
-                    fetch('admin_profile?action=details')
+                    fetch('admin_profile?action=details', { signal: this._signal() })
                         .then(res => res.json())
                         .then(data => {
                             if (data.success && data.profile) {
                                 this.profile = data.profile;
                             }
-                        });
+                        })
+                        .catch(e => { if (!this._gone(e)) console.error(e); });
                     window.addEventListener('resize', this.handleResize);
                 },
                 beforeUnmount() {
                     window.removeEventListener('resize', this.handleResize);
+                    window.removeEventListener('pagehide', this._onLeave);
+                    document.removeEventListener('click', this.handleClickOutsideProfile);
+                    try { this._abort && this._abort.abort(); } catch (e) {}
                 },
                 watch: {
                     darkMode(val) {
@@ -112,15 +124,18 @@ const { createApp } = Vue;
                         }
                         return query;
                     },
+                    _signal() { return this._abort ? this._abort.signal : undefined; },
+                    _gone(e) { return e && e.name === 'AbortError'; },
                     async fetchCampuses() {
                         try {
-                            const response = await fetch('/admin_user?action=campuses');
+                            const response = await fetch('/admin_user?action=campuses', { signal: this._signal() });
                             const data = await response.json();
                             if (data.success) {
                                 this.campuses = data.campuses || [];
                                 this.isSuperadmin = !!data.is_superadmin;
                             }
                         } catch (error) {
+                            if (this._gone(error)) return;
                             this.campuses = [];
                         }
                     },
@@ -135,23 +150,25 @@ const { createApp } = Vue;
                     },
                     async fetchColleges() {
                         try {
-                            const response = await fetch('/admin_reports?action=colleges' + this.campusQuery());
+                            const response = await fetch('/admin_reports?action=colleges' + this.campusQuery(), { signal: this._signal() });
                             const data = await response.json();
                             if (data.success) {
                                 this.colleges = data.colleges;
                             }
                         } catch (error) {
+                            if (this._gone(error)) return;
                             this.colleges = [];
                         }
                     },
                     async fetchYears() {
                         try {
-                            const response = await fetch('/admin_reports?action=years' + this.campusQuery());
+                            const response = await fetch('/admin_reports?action=years' + this.campusQuery(), { signal: this._signal() });
                             const data = await response.json();
                             if (data.success) {
                                 this.years = data.years;
                             }
                         } catch (error) {
+                            if (this._gone(error)) return;
                             this.years = [];
                         }
                     },
@@ -170,6 +187,7 @@ const { createApp } = Vue;
                             const response = await fetch('/admin_reports?action=emailReport', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
+                                signal: this._signal(),
                                 body: JSON.stringify({
                                     recipient_email: this.emailReportRecipient,
                                     college: this.emailReportCollege || null,
@@ -185,15 +203,22 @@ const { createApp } = Vue;
                                 this.showNotification(data.message || 'Failed to send report.', 'error');
                             }
                         } catch (error) {
+                            if (this._gone(error)) return;
                             this.showNotification('Failed to send report.', 'error');
                         } finally {
                             this.emailReportSending = false;
                         }
                     },
                     async fetchSummaryData() {
+                        // Guard against a slow earlier response (e.g. filter changed
+                        // twice quickly) overwriting a newer one: only the latest
+                        // call may commit its data.
+                        const req = (this._summaryReq = (this._summaryReq || 0) + 1);
+                        this.loading = true;
                         try {
-                            const response = await fetch('/admin_reports?action=summary' + this.campusQuery());
+                            const response = await fetch('/admin_reports?action=summary' + this.campusQuery(), { signal: this._signal() });
                             const data = await response.json();
+                            if (req !== this._summaryReq) return; // a newer request superseded this one
 
                             if (data.success) {
                                 this.programStats = data.program_stats;
@@ -204,10 +229,11 @@ const { createApp } = Vue;
                                 this.showNotification('Failed to load summary data', 'error');
                             }
                         } catch (error) {
+                            if (this._gone(error)) return;
                             console.error('Error fetching summary data:', error);
                             this.showNotification('Failed to load summary data', 'error');
                         } finally {
-                            this.loading = false;
+                            if (req === this._summaryReq) this.loading = false;
                         }
                     },
                     toggleSidebar() {
@@ -722,7 +748,7 @@ const { createApp } = Vue;
                         try {
                             if (format === 'excel') {
                                 // Fetch data from fetch_all_report_data.php
-                                const response = await fetch('/admin_reports?action=fullData' + this.campusQuery());
+                                const response = await fetch('/admin_reports?action=fullData' + this.campusQuery(), { signal: this._signal() });
                                 const data = await response.json();
                                 
                                 if (!data.success) {
@@ -894,6 +920,7 @@ const { createApp } = Vue;
                                 this.showNotification('Excel report exported successfully!', 'success');
                             }
                         } catch (error) {
+                            if (this._gone(error)) return;
                             console.error('Export error:', error);
                             this.showNotification('Failed to export report', 'error');
                         }
@@ -902,7 +929,7 @@ const { createApp } = Vue;
                     async exportDetailedEmployment(format) {
                         try {
                             if (format === 'excel') {
-                                const response = await fetch('/admin_reports?action=fullData' + this.campusQuery());
+                                const response = await fetch('/admin_reports?action=fullData' + this.campusQuery(), { signal: this._signal() });
                                 const data = await response.json();
                                 
                                 if (!data.success) {
@@ -1297,6 +1324,7 @@ const { createApp } = Vue;
                                 this.showNotification('Excel report exported successfully!', 'success');
                             }
                         } catch (error) {
+                            if (this._gone(error)) return;
                             console.error('Export error:', error);
                             this.showNotification('Failed to export detailed employment report', 'error');
                         }
@@ -1376,7 +1404,7 @@ const { createApp } = Vue;
                     async exportIndustryAnalysis(format) {
                         try {
                             if (format === 'excel') {
-                                const response = await fetch('/admin_reports?action=fullData' + this.campusQuery());
+                                const response = await fetch('/admin_reports?action=fullData' + this.campusQuery(), { signal: this._signal() });
                                 const data = await response.json();
                                 
                                 if (!data.success) {
@@ -1549,6 +1577,7 @@ const { createApp } = Vue;
                                 this.showNotification('Excel report exported successfully!', 'success');
                             }
                         } catch (error) {
+                            if (this._gone(error)) return;
                             console.error('Export error:', error);
                             this.showNotification('Failed to export report', 'error');
                         }
