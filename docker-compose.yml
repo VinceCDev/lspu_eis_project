@@ -31,6 +31,8 @@ x-laravel-env: &laravel-env
   QUEUE_CONNECTION: sync
   FILESYSTEM_DISK: local
   MAIL_MAILER: "${MAIL_MAILER:-log}"
+  SUPERADMIN_EMAIL: "${SUPERADMIN_EMAIL:-superadmin@lspu.edu.ph}"
+  SUPERADMIN_PASSWORD: "${SUPERADMIN_PASSWORD:-ChangeMe!Super2026}"
 
 services:
   app:

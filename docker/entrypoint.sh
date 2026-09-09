@@ -66,6 +66,9 @@ if [ "${APP_BOOTSTRAP:-run}" = "run" ]; then
     echo "[entrypoint] Running migrations (any new ones only)..."
     php artisan migrate --force || echo "[entrypoint] migrate reported an issue — continuing."
 
+    echo "[entrypoint] Ensuring default superadmin account..."
+    php artisan db:seed --class=SuperadminSeeder --force || echo "[entrypoint] superadmin seed skipped — continuing."
+
     echo "[entrypoint] Caching config / routes / views..."
     php artisan package:discover --ansi 2>/dev/null || true
     php artisan config:cache
