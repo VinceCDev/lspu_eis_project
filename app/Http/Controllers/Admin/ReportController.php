@@ -10,6 +10,7 @@ use App\Services\MailService;
 use App\Services\ReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
@@ -35,7 +36,16 @@ class ReportController extends Controller
         $college = $request->query('college');
         $yearGraduated = $this->resolveYearGraduated($request->query('year_graduated'));
 
-        return response()->json((new ReportService(null, null, $campusId, $college, $yearGraduated))->summary());
+        // Aggregated report figures change only when alumni/experience data
+        // does (imports, edits) — a short TTL keeps the page snappy and stops
+        // concurrent tabs/admins each rebuilding it.
+        $data = Cache::remember(
+            $this->reportCacheKey('summary', $campusId, $college, $yearGraduated),
+            300,
+            fn () => (new ReportService(null, null, $campusId, $college, $yearGraduated))->summary()
+        );
+
+        return response()->json($data);
     }
 
     public function fullData(Request $request): JsonResponse
@@ -43,10 +53,21 @@ class ReportController extends Controller
         $campusId = $this->resolveCampusId($request->query('campus_id'));
         $college = $request->query('college');
         $yearGraduated = $this->resolveYearGraduated($request->query('year_graduated'));
-        $data = (new ReportService(null, null, $campusId, $college, $yearGraduated))->fullReportData();
+
+        $data = Cache::remember(
+            $this->reportCacheKey('full', $campusId, $college, $yearGraduated),
+            300,
+            fn () => (new ReportService(null, null, $campusId, $college, $yearGraduated))->fullReportData()
+        );
         $data['campus_name'] = $campusId !== null ? $this->campusName($campusId) : 'All Campuses';
 
         return response()->json($data);
+    }
+
+    /** Scope-specific cache key (campus + college + year); never user-specific. */
+    private function reportCacheKey(string $part, ?int $campusId, ?string $college, ?int $year): string
+    {
+        return 'report:'.$part.':'.md5(($campusId ?? 'all').'|'.($college ?? '').'|'.($year ?? ''));
     }
 
     public function colleges(Request $request): JsonResponse

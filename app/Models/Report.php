@@ -112,17 +112,74 @@ class Report
 
     public function unemployedCount(): int
     {
-        $row = $this->selectOne('SELECT COUNT(DISTINCT a.alumni_id) as count
+        // Anti-join (matches DashboardStats' C3): alumni with no experience row
+        // that carries a non-empty employment_status. MySQL drives this from an
+        // index on alumni_experience(alumni_id) instead of materialising every
+        // employed id for a NOT IN (SELECT ...).
+        $row = $this->selectOne('SELECT COUNT(*) as count
             FROM alumni a
-            WHERE a.alumni_id NOT IN (
-                SELECT DISTINCT a2.alumni_id
-                FROM alumni a2
-                LEFT JOIN alumni_experience e2 ON a2.alumni_id = e2.alumni_id
-                WHERE e2.employment_status IS NOT NULL AND e2.employment_status != \'\'
-            )'
+            LEFT JOIN alumni_experience e2
+              ON e2.alumni_id = a.alumni_id
+             AND e2.employment_status IS NOT NULL AND e2.employment_status <> \'\'
+            WHERE e2.alumni_id IS NULL'
             .$this->campusClause('a'));
 
         return (int) ($row['count'] ?? 0);
+    }
+
+    /**
+     * One aggregated row per (course, college): graduate count and
+     * employed count. Replaces pulling one row per alumnus into PHP just
+     * to tally these (ReportService::summary()).
+     *
+     * COUNT(*) over the `AND e.current = 1` LEFT JOIN mirrors the old
+     * row-per-current-experience semantics exactly (an alumnus with two
+     * current jobs counted twice; one with none counted once).
+     */
+    public function programEmploymentAggregate(): array
+    {
+        return $this->selectAll(
+            "SELECT a.course, a.college,
+                    COUNT(*) AS total_graduates,
+                    SUM(CASE WHEN e.employment_status IS NOT NULL AND e.employment_status <> '' THEN 1 ELSE 0 END) AS employed_count
+             FROM alumni a
+             LEFT JOIN alumni_experience e ON a.alumni_id = e.alumni_id AND e.current = 1"
+            .$this->campusClause('a', true).'
+             GROUP BY a.course, a.college'
+        );
+    }
+
+    /**
+     * Employed graduates with a job title, grouped by (course, college,
+     * job title). The caller classifies each distinct title once (cached)
+     * instead of once per alumnus — the "job match rate" input for
+     * ReportService::summary().
+     */
+    public function employedJobTitleCounts(): array
+    {
+        return $this->selectAll(
+            "SELECT a.course, a.college, e.title AS job_title, COUNT(*) AS cnt
+             FROM alumni a
+             JOIN alumni_experience e ON a.alumni_id = e.alumni_id AND e.current = 1
+             WHERE e.employment_status IS NOT NULL AND e.employment_status <> ''
+               AND e.title IS NOT NULL AND e.title <> ''
+               AND a.course IS NOT NULL AND a.course <> ''"
+            .$this->campusClause('a').'
+             GROUP BY a.course, a.college, e.title'
+        );
+    }
+
+    /** Distinct (course, current job title) pairs in scope — to warm AlignmentService in one shot. */
+    public function distinctCourseJobTitlePairs(): array
+    {
+        return $this->selectAll(
+            "SELECT DISTINCT a.course, e.title AS job_title
+             FROM alumni a
+             JOIN alumni_experience e ON a.alumni_id = e.alumni_id AND e.current = 1
+             WHERE e.title IS NOT NULL AND e.title <> ''
+               AND a.course IS NOT NULL AND a.course <> ''"
+            .$this->campusClause('a')
+        );
     }
 
     public function employmentSummaryRows(): array

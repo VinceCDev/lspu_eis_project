@@ -60,18 +60,11 @@ class ReportService
     public function summary(): array
     {
         $courseStats = [];
-        $rows = $this->report->courseCollegeJobRows();
 
-        // Batch-warms alignment's in-memory cache for every row up front —
-        // classifyAlignmentLabel() below used to hit the DB once per row
-        // (thousands of rows), which alone accounted for most of this
-        // endpoint's page-load time even when every pair was already cached.
-        $this->alignment->preload(array_map(
-            static fn (array $row) => ['course' => $row['course'] ?? '', 'title' => $row['job_title'] ?? ''],
-            $rows
-        ));
-
-        foreach ($rows as $row) {
+        // Graduate + employed tallies straight from SQL (one row per
+        // course/college), instead of pulling one row per alumnus (100k+
+        // rows) into PHP just to count them.
+        foreach ($this->report->programEmploymentAggregate() as $row) {
             $program = Report::normalizeProgram($row['college'], $row['course']);
             $key = $program.'|'.$row['college'];
             if (!isset($courseStats[$key])) {
@@ -83,21 +76,27 @@ class ReportService
                     'related_job_count' => 0,
                 ];
             }
+            $courseStats[$key]['total_graduates'] += (int) $row['total_graduates'];
+            $courseStats[$key]['employed_count'] += (int) $row['employed_count'];
+        }
 
-            ++$courseStats[$key]['total_graduates'];
-
-            if (empty($row['employment_status'])) {
+        // "Job match rate" needs the alignment label, which isn't expressible
+        // in SQL. Classify each DISTINCT (course, title) once — cached — and
+        // multiply by its count, rather than calling classifyOne() once per
+        // alumnus.
+        $titleCounts = $this->report->employedJobTitleCounts();
+        $this->alignment->preload(array_map(
+            static fn (array $row) => ['course' => $row['course'] ?? '', 'title' => $row['job_title'] ?? ''],
+            $titleCounts
+        ));
+        foreach ($titleCounts as $row) {
+            $program = Report::normalizeProgram($row['college'], $row['course']);
+            $key = $program.'|'.$row['college'];
+            if (!isset($courseStats[$key])) {
                 continue;
             }
-
-            ++$courseStats[$key]['employed_count'];
-
-            if (empty($row['job_title']) || empty($row['course'])) {
-                continue;
-            }
-
             if ($this->classifyAlignmentLabel($row['course'], $row['job_title']) === 'aligned') {
-                ++$courseStats[$key]['related_job_count'];
+                $courseStats[$key]['related_job_count'] += (int) $row['cnt'];
             }
         }
 
@@ -200,6 +199,16 @@ class ReportService
 
     public function fullReportData(): array
     {
+        // Warm AlignmentService once for every distinct (course, job title) in
+        // scope. Without this, employmentSummary() and detailedEmployment()
+        // call classifyAlignmentLabel() -> classifyOne() per alumnus, each a
+        // separate alignment_cache SELECT (measured: 856 duplicate queries at
+        // ~4k alumni). Same fix as the dashboard's 849 -> 2.
+        $this->alignment->preload(array_map(
+            static fn (array $row) => ['course' => $row['course'] ?? '', 'title' => $row['job_title'] ?? ''],
+            $this->report->distinctCourseJobTitlePairs()
+        ));
+
         return [
             'success' => true,
             'employment_summary' => $this->employmentSummary(),
