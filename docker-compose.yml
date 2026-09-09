@@ -66,8 +66,12 @@ services:
   db:
     image: mysql:8.0
     # native password auth so the (MariaDB) mysql client in the app image
-    # can connect without the caching_sha2_password plugin
-    command: --default-authentication-plugin=mysql_native_password
+    # can connect without caching_sha2_password; a bigger buffer pool keeps
+    # the reporting GROUP BYs in memory on a small VPS.
+    command: >-
+      --default-authentication-plugin=mysql_native_password
+      --innodb-buffer-pool-size=384M
+      --innodb-flush-neighbors=0
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: "${DB_DATABASE:-lspu_eis}"
