@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1
 #
 # Production image for the LSPU EIS Laravel app (PHP 8.2 / Laravel 12).
+# Self-contained: the application code and Composer dependencies are baked
+# into the image, so it does not need the repo checked out on the host.
 # No Node build step: all frontend assets are vendored/pre-compiled and
-# committed under public/assets. This image only needs PHP + Composer.
+# committed under public/assets.
 
 FROM php:8.2-fpm-bookworm
 
@@ -40,8 +42,26 @@ COPY docker/php/php.ini /usr/local/etc/php/conf.d/zz-app.ini
 
 WORKDIR /var/www/html
 
-# App code is bind-mounted at runtime by docker-compose, so we do NOT copy
-# it here. `vendor/` is installed on first boot by the entrypoint.
+# --- Composer dependencies (cached layer) -------------------------------
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --optimize-autoloader --no-interaction \
+        --no-scripts --prefer-dist
+
+# --- Application code --------------------------------------------------
+COPY . .
+
+RUN composer dump-autoload --no-dev --optimize --classmap-authoritative --no-scripts \
+    && php artisan package:discover --ansi || true
+RUN mkdir -p \
+        storage/framework/cache/data \
+        storage/framework/sessions \
+        storage/framework/views \
+        storage/logs \
+        storage/app/public \
+        public/uploads \
+    && chown -R www-data:www-data storage bootstrap/cache public/uploads \
+    && chmod -R 775 storage bootstrap/cache
+
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint
 RUN chmod +x /usr/local/bin/entrypoint
 
