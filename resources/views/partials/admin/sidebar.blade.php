@@ -15,7 +15,7 @@ $rolePrefix = \App\Core\Auth::role() === 'superadmin' ? 'superadmin' : 'admin';
     <div class="bg-white dark:bg-slate-700 shadow-sm h-[70px] border-b border-slate-200 dark:border-gray-700">
         <div class="flex items-center h-full px-6 mx-auto max-w-7xl">
             <a href="admin_dashboard" class="flex items-center">
-                <img src="<?= asset('assets/images/logo.png') ?>" alt="Logo" class="w-12 h-12 mr-4 rounded-lg bg-white p-1 shadow-md ring-1 ring-slate-200/50 dark:bg-slate-700 dark:ring-slate-600/50">
+                <img src="<?= asset('assets/images/logo-sm.png') ?>" alt="Logo" class="w-12 h-12 mr-4 rounded-lg bg-white p-1 shadow-md ring-1 ring-slate-200/50 dark:bg-slate-700 dark:ring-slate-600/50">
                 <span class="text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">LSPU EIS</span>
             </a>
             <button class="md:hidden ml-auto p-2 rounded-full hover:bg-slate-100/50 dark:hover:bg-slate-700/50 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500/30" @click="toggleSidebar">

@@ -10,7 +10,7 @@ $active = $active ?? '';
     @include('partials.session_guard')
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($title) ?></title>
-    <link rel="icon" type="image/png" href="<?= asset('assets/images/logo.png') ?>">
+    <link rel="icon" type="image/png" href="<?= asset('assets/images/logo-sm.png') ?>">
     <link rel="stylesheet" href="<?= asset('assets/vendor/fontawesome/css/all.min.css') ?>">
     <link rel="stylesheet" href="<?= asset('assets/vendor/tailwind/tailwind.css') ?>">
     <?php if (!empty($pageCss)): ?>

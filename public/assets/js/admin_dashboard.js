@@ -295,12 +295,14 @@ createApp({
             const textColor = this.darkMode ? '#e5e7eb' : '#374151';
             const gridColor = this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
             const programs = Object.keys(campus.employment_status_per_program || {});
-            const statusLabels = ['Probational', 'Contractual', 'Regular', 'Self-employed', 'Unemployed'];
+            // Must match DashboardStats::EMPLOYED_STATUS_BUCKETS + 'Unemployed'.
+            const statusLabels = ['Probational', 'Contractual', 'Regular', 'Self-employed', 'Employed (Other)', 'Unemployed'];
             const colors = [
                 ['rgba(153, 102, 255, 0.7)', 'rgba(153, 102, 255, 1)'],
                 ['rgba(255, 159, 64, 0.7)', 'rgba(255, 159, 64, 1)'],
                 ['rgba(54, 162, 235, 0.7)', 'rgba(54, 162, 235, 1)'],
                 ['rgba(75, 192, 192, 0.7)', 'rgba(75, 192, 192, 1)'],
+                ['rgba(201, 203, 207, 0.7)', 'rgba(201, 203, 207, 1)'],
                 ['rgba(255, 99, 132, 0.7)', 'rgba(255, 99, 132, 1)']
             ];
             const datasets = statusLabels.map((status, i) => ({
@@ -628,7 +630,7 @@ createApp({
         buildExportSections() {
             const stats = this.dashboardStats || {};
 
-            const statusTotals = { Probational: 0, Contractual: 0, Regular: 0, 'Self-employed': 0, Unemployed: 0 };
+            const statusTotals = { Probational: 0, Contractual: 0, Regular: 0, 'Self-employed': 0, 'Employed (Other)': 0, Unemployed: 0 };
             Object.values(stats.employment_status_per_program || {}).forEach(counts => {
                 Object.keys(statusTotals).forEach(label => {
                     statusTotals[label] += counts[label] || 0;
