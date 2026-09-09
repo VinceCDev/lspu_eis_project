@@ -276,26 +276,28 @@ class AlumniController extends Controller
             return response()->json(['success' => false, 'message' => 'That graduation year looks wrong.']);
         }
 
-        $tmp = $file->getRealPath() ?: $file->store('tmp');
-        if (!is_file($tmp)) {
-            $tmp = storage_path('app/'.$tmp);
-        }
+        $tmp = $file->getRealPath() ?: storage_path('app/'.$file->store('tmp'));
 
         try {
             $summary = (new EmploymentReportImporter())->import($tmp, $campusId, $year);
-        } catch (\Throwable $e) {
-            return response()->json(['success' => false, 'message' => 'Could not read the file: '.$e->getMessage()]);
-        }
 
-        (new AuditLog())->log(
-            (int) Auth::user()['user_id'],
-            Auth::user()['email'] ?? null,
-            Auth::role(),
-            'import_employment_report',
-            'alumni',
-            null,
-            "Imported {$summary['imported']} alumni from an employment report ({$summary['skipped']} skipped)."
-        );
+            (new AuditLog())->log(
+                (int) Auth::user()['user_id'],
+                Auth::user()['email'] ?? null,
+                Auth::role(),
+                'import_employment_report',
+                'alumni',
+                null,
+                "Imported {$summary['imported']} alumni from an employment report ({$summary['skipped']} skipped)."
+            );
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Import failed: '.$e->getMessage(),
+            ]);
+        }
 
         return response()->json([
             'success' => true,

@@ -6,6 +6,7 @@ use App\Models\SiteSetting;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 /**
  * Imports graduates from an LSPU "Data on Employment" (graduate tracer)
@@ -103,7 +104,18 @@ class EmploymentReportImporter
 
     private function run(string $path, ?int $campusId, ?int $year, bool $dryRun): array
     {
-        $book = IOFactory::load($path);
+        // Large tracer workbooks (20+ sheets) are heavy to parse.
+        @ini_set('memory_limit', '1024M');
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(600);
+        }
+
+        // Keep number formats (so date cells read as "July 5, 2023" etc.),
+        // but skip charts to save memory. rangeToArray below is what makes
+        // this fast; per-cell reads were the bottleneck.
+        $reader = IOFactory::createReaderForFile($path);
+        $reader->setIncludeCharts(false);
+        $book = $reader->load($path);
 
         foreach ($book->getAllSheets() as $sheet) {
             $title = $sheet->getTitle();
@@ -153,15 +165,17 @@ class EmploymentReportImporter
     private function sheetGrid($sheet): array
     {
         $lastRow = $sheet->getHighestDataRow();
-        $lastCol = min(Coordinate::columnIndexFromString($sheet->getHighestDataColumn()), 60);
+        $lastCol = min(Coordinate::columnIndexFromString($sheet->getHighestDataColumn()), 40);
+        $endCol = Coordinate::stringFromColumnIndex($lastCol);
 
+        // rangeToArray is far cheaper than getCell() per cell.
+        // args: nullValue, calculateFormulas=true (so pivot totals don't break
+        // text cells), formatData=true (keeps "July 5, 2023" etc. as shown),
+        // returnCellRef=false. Re-key to real 1-based row numbers.
         $grid = [];
-        for ($r = 1; $r <= $lastRow; $r++) {
-            $cells = [];
-            for ($c = 1; $c <= $lastCol; $c++) {
-                $cells[$c - 1] = trim((string) $sheet->getCell([$c, $r])->getFormattedValue());
-            }
-            $grid[$r] = $cells;
+        $rowNo = 0;
+        foreach ($sheet->rangeToArray("A1:{$endCol}{$lastRow}", null, true, true, false) as $cells) {
+            $grid[++$rowNo] = array_map(static fn ($v) => trim((string) ($v ?? '')), array_values($cells));
         }
 
         return $grid;
@@ -243,17 +257,6 @@ class EmploymentReportImporter
         }
 
         return null;
-    }
-
-    private function rowLooksLikeSubHeader(array $row, array $map): bool
-    {
-        foreach (['company_pos', 'contact', 'email', 'birthday'] as $f) {
-            if (isset($map[$f]) && preg_match(self::FIELDS[$f], trim($row[$map[$f]] ?? ''))) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /** @return array<string,string> field => raw value */
@@ -589,10 +592,30 @@ class EmploymentReportImporter
         return substr($d, 0, 20);
     }
 
+    /**
+     * Real Excel date cells come back as a numeric serial when the sheet is
+     * read data-only. Convert those; leave text values alone.
+     */
+    private function fromExcelSerial(string $v): string
+    {
+        if (preg_match('/^\d{4,6}(\.\d+)?$/', $v)) {
+            $n = (float) $v;
+            if ($n >= 20000 && $n <= 60000) {   // ~1954 .. ~2064
+                try {
+                    return ExcelDate::excelToDateTimeObject($n)->format('Y-m-d');
+                } catch (\Throwable) {
+                    // fall through
+                }
+            }
+        }
+
+        return $v;
+    }
+
     /** "July 5, 2023" => [2023, "2023-07-05"] */
     private function parseGraduationDate(string $v): array
     {
-        $v = trim($v);
+        $v = $this->fromExcelSerial(trim($v));
         if ($v === '') {
             return [null, null];
         }
@@ -615,9 +638,12 @@ class EmploymentReportImporter
 
     private function parseLooseDate(string $v, bool $isBirthday = false): ?string
     {
-        $v = trim(preg_replace('/\s+/', ' ', $v));
+        $v = $this->fromExcelSerial(trim(preg_replace('/\s+/', ' ', $v)));
         if ($v === '' || strlen($v) < 4) {
             return null;
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) {   // already ISO (from a serial)
+            return $isBirthday && substr($v, 0, 4) === date('Y') ? null : $v;
         }
         if (preg_match('/^(19|20)\d{2}$/', $v)) {
             return $isBirthday ? null : "{$v}-01-01";
