@@ -13,17 +13,21 @@ if [ "${APP_BOOTSTRAP:-run}" = "run" ]; then
         composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
     fi
 
+    # Laravel wants a .env file to exist even when real environment
+    # variables are injected by the platform. Seed it from the template;
+    # any real env var (APP_KEY, DB_PASSWORD, ...) overrides the placeholder.
     if [ ! -f .env ]; then
-        echo "[entrypoint] No .env found — copying .env.example (EDIT IT AND REDEPLOY)"
-        cp .env.example .env
+        echo "[entrypoint] Seeding .env from .env.docker.example"
+        cp .env.docker.example .env
     fi
 
-    if ! grep -q "^APP_KEY=base64:" .env; then
+    # Generate a key only if none was supplied via env AND none is in .env
+    if [ -z "${APP_KEY}" ] && ! grep -q "^APP_KEY=base64:" .env; then
         echo "[entrypoint] Generating APP_KEY..."
         php artisan key:generate --force
     fi
 
-    echo "[entrypoint] Waiting for database..."
+    echo "[entrypoint] Waiting for database / running migrations..."
     tries=0
     until php artisan migrate --force 2>/dev/null; do
         tries=$((tries + 1))
