@@ -8,6 +8,9 @@
             <button class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition w-full sm:w-auto justify-center" @click="openAddModal">
                 <i class="fas fa-plus"></i> Add Alumni
             </button>
+            <button class="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition w-full sm:w-auto justify-center" @click="openImportModal">
+                <i class="fas fa-file-import"></i> Import
+            </button>
             <button class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition w-full sm:w-auto justify-center" @click="exportToExcel">
                 <i class="fas fa-file-excel"></i> Export Excel
             </button>
@@ -451,6 +454,79 @@
         <div class="flex justify-end gap-2">
             <button class="px-4 py-2 rounded bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-400 dark:hover:bg-gray-700" @click="showDeleteModal = false">Cancel</button>
             <button class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 transition" @click="confirmDeleteAlumni">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- Import from Employment Report -->
+<div v-if="showImportModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black bg-opacity-50" role="dialog" aria-modal="true">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-lg mx-2 p-6 relative">
+        <button class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" @click="showImportModal = false" aria-label="Close"><i class="fas fa-times"></i></button>
+        <h3 class="text-lg font-bold mb-1 text-gray-800 dark:text-gray-100">Import from Employment Report</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Upload an LSPU "Data on Employment" tracer file (.xlsx / .xls / .csv). Each listed graduate
+            is added as an alumni record, with their LSPU degree and current job. Rows with a blank
+            email get a temporary inactive account. Existing emails are skipped.
+            Credential emails are <strong>not</strong> sent during import unless the
+            "New Account Emails" setting is turned on.
+        </p>
+
+        <div v-if="!importResult">
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div v-if="isSuperadmin">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Campus <span class="text-red-500">*</span></label>
+                    <select v-model="importCampusId" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-gray-200">
+                        <option value="">Select campus…</option>
+                        <option v-for="c in campuses" :key="c.campus_id" :value="c.campus_id">{{ c.name }}</option>
+                    </select>
+                </div>
+                <div :class="{ 'col-span-2': !isSuperadmin }">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Graduation year <span class="text-red-500">*</span></label>
+                    <input type="number" v-model.number="importYear" min="1960" :max="new Date().getFullYear() + 1" placeholder="e.g. 2023" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-gray-200">
+                </div>
+            </div>
+            <label class="block w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-indigo-400 transition">
+                <input type="file" accept=".xlsx,.xls,.csv" class="hidden" @change="onImportFileChange">
+                <i class="fas fa-file-excel text-3xl text-indigo-500 mb-2"></i>
+                <div class="text-sm text-gray-600 dark:text-gray-300">{{ importFile ? importFile.name : 'Click to choose a file' }}</div>
+            </label>
+            <div class="flex justify-end gap-2 mt-5">
+                <button class="px-4 py-2 rounded bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700" @click="showImportModal = false">Cancel</button>
+                <button class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition disabled:opacity-50" :disabled="!importFile || importing || (isSuperadmin && !importCampusId) || !importYear" @click="runImport">
+                    {{ importing ? 'Importing…' : 'Import' }}
+                </button>
+            </div>
+        </div>
+
+        <div v-else class="text-sm">
+            <div class="grid grid-cols-2 gap-2 mb-3">
+                <div class="bg-green-50 dark:bg-green-900/30 rounded p-3"><span class="text-2xl font-bold text-green-700 dark:text-green-300">{{ importResult.imported }}</span><div class="text-gray-600 dark:text-gray-400">imported</div></div>
+                <div class="bg-gray-50 dark:bg-gray-700 rounded p-3"><span class="text-2xl font-bold text-gray-700 dark:text-gray-200">{{ importResult.skipped }}</span><div class="text-gray-600 dark:text-gray-400">skipped</div></div>
+                <div class="bg-gray-50 dark:bg-gray-700 rounded p-3"><span class="font-bold">{{ importResult.experience_rows }}</span> job entries</div>
+                <div class="bg-gray-50 dark:bg-gray-700 rounded p-3"><span class="font-bold">{{ importResult.placeholder_emails }}</span> temp emails</div>
+            </div>
+            <p class="text-gray-500 dark:text-gray-400 mb-3">{{ importResult.emailed || 0 }} credential email(s) sent.</p>
+            <div v-if="importResult.warnings && importResult.warnings.length" class="mb-2">
+                <div class="font-semibold text-amber-600 dark:text-amber-400">Warnings</div>
+                <ul class="list-disc ml-5 max-h-32 overflow-y-auto text-gray-600 dark:text-gray-300">
+                    <li v-for="(w, i) in importResult.warnings" :key="'w'+i">{{ w }}</li>
+                </ul>
+            </div>
+            <div v-if="importResult.skipped_details && importResult.skipped_details.length" class="mb-2">
+                <div class="font-semibold text-gray-600 dark:text-gray-300">Skipped rows</div>
+                <ul class="list-disc ml-5 max-h-32 overflow-y-auto text-gray-600 dark:text-gray-300">
+                    <li v-for="(s, i) in importResult.skipped_details" :key="'s'+i">{{ s }}</li>
+                </ul>
+            </div>
+            <div v-if="importResult.errors && importResult.errors.length" class="mb-2">
+                <div class="font-semibold text-red-600 dark:text-red-400">Errors</div>
+                <ul class="list-disc ml-5 max-h-32 overflow-y-auto text-red-600 dark:text-red-400">
+                    <li v-for="(e, i) in importResult.errors" :key="'e'+i">{{ e }}</li>
+                </ul>
+            </div>
+            <div class="flex justify-end mt-4">
+                <button class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition" @click="closeImportModal">Done</button>
+            </div>
         </div>
     </div>
 </div>

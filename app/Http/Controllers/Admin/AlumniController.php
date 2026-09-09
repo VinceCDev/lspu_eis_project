@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use App\Models\SiteSetting;
 use App\Models\User;
 use App\Services\Auth;
+use App\Services\EmploymentReportImporter;
 use App\Services\MailService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -242,6 +243,65 @@ class AlumniController extends Controller
         }
 
         return $this->create($request->all());
+    }
+
+    /**
+     * Bulk-import graduates from an LSPU "Data on Employment" (tracer) Excel
+     * file. Non-superadmin admins can only import into their own campus.
+     */
+    public function importEmploymentReport(Request $request): JsonResponse
+    {
+        $file = $request->file('file');
+        if (!$file || !$file->isValid()) {
+            return response()->json(['success' => false, 'message' => 'No file was uploaded.']);
+        }
+
+        $ext = strtolower($file->getClientOriginalExtension());
+        if (!in_array($ext, ['xlsx', 'xls', 'csv'], true)) {
+            return response()->json(['success' => false, 'message' => 'Please upload an .xlsx, .xls or .csv file.']);
+        }
+        if ($file->getSize() > 15 * 1024 * 1024) {
+            return response()->json(['success' => false, 'message' => 'File is too large (max 15 MB).']);
+        }
+
+        $campusId = Auth::role() === 'superadmin'
+            ? ((int) $request->input('campus_id') ?: null)
+            : Auth::campusId();
+        if (!$campusId) {
+            return response()->json(['success' => false, 'message' => 'Please choose a campus for this import.']);
+        }
+
+        $year = (int) $request->input('year') ?: null;
+        if ($year !== null && ($year < 1960 || $year > (int) date('Y') + 1)) {
+            return response()->json(['success' => false, 'message' => 'That graduation year looks wrong.']);
+        }
+
+        $tmp = $file->getRealPath() ?: $file->store('tmp');
+        if (!is_file($tmp)) {
+            $tmp = storage_path('app/'.$tmp);
+        }
+
+        try {
+            $summary = (new EmploymentReportImporter())->import($tmp, $campusId, $year);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => 'Could not read the file: '.$e->getMessage()]);
+        }
+
+        (new AuditLog())->log(
+            (int) Auth::user()['user_id'],
+            Auth::user()['email'] ?? null,
+            Auth::role(),
+            'import_employment_report',
+            'alumni',
+            null,
+            "Imported {$summary['imported']} alumni from an employment report ({$summary['skipped']} skipped)."
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => "Imported {$summary['imported']} of {$summary['graduate_rows']} graduate rows.",
+            'summary' => $summary,
+        ]);
     }
 
     private function create(array $data): JsonResponse

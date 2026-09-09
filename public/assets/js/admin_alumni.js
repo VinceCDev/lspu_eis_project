@@ -42,6 +42,12 @@ createApp({
             isSuperadmin: false,
             showDeleteModal: false,
             alumniToDelete: null,
+            showImportModal: false,
+            importFile: null,
+            importCampusId: '',
+            importYear: null,
+            importing: false,
+            importResult: null,
             showViewModal: false,
             viewAlumniData: {
                 skills: [],
@@ -355,6 +361,49 @@ createApp({
         campusNameById(campusId) {
             const campus = this.campuses.find(c => String(c.campus_id) === String(campusId));
             return campus ? campus.name : null;
+        },
+        // Import from Employment Report
+        openImportModal() {
+            this.importFile = null;
+            this.importResult = null;
+            this.importing = false;
+            this.importCampusId = this.isSuperadmin ? '' : (this.currentCampusId || '');
+            this.importYear = null;
+            if (!this.campuses.length) this.fetchCampuses();
+            this.showImportModal = true;
+        },
+        closeImportModal() {
+            this.showImportModal = false;
+            if (this.importResult && this.importResult.imported > 0) {
+                this.fetchAlumni();
+            }
+            this.importResult = null;
+            this.importFile = null;
+        },
+        onImportFileChange(e) {
+            this.importFile = e.target.files[0] || null;
+        },
+        async runImport() {
+            if (!this.importFile) return;
+            this.importing = true;
+            try {
+                const fd = new FormData();
+                fd.append('file', this.importFile);
+                if (this.importCampusId) fd.append('campus_id', this.importCampusId);
+                if (this.importYear) fd.append('year', this.importYear);
+                const res = await fetch('/admin_alumni?action=importEmploymentReport', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (data.success) {
+                    this.importResult = data.summary;
+                    this.showNotification(data.message, 'success');
+                } else {
+                    this.showNotification(data.message || 'Import failed.', 'error');
+                }
+            } catch (err) {
+                this.showNotification('Import failed.', 'error');
+            } finally {
+                this.importing = false;
+            }
         },
         // Modals (Add/Edit/View/Delete)
         openAddModal() {
