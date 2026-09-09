@@ -459,8 +459,8 @@
 </div>
 
 <!-- Import from Employment Report -->
-<div v-if="showImportModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black bg-opacity-50" role="dialog" aria-modal="true">
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-lg mx-2 p-6 relative">
+<div v-if="showImportModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black bg-opacity-50" role="dialog" aria-modal="true" style="padding:1rem;">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-lg mx-2 p-6 relative" style="max-height:88vh;overflow-y:auto;">
         <button class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" @click="showImportModal = false" aria-label="Close"><i class="fas fa-times"></i></button>
         <h3 class="text-lg font-bold mb-1 text-gray-800 dark:text-gray-100">Import from Employment Report</h3>
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
@@ -472,7 +472,7 @@
         </p>
 
         <div v-if="!importResult">
-            <div class="grid grid-cols-2 gap-3 mb-3">
+            <div class="mb-3" style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
                 <div v-if="isSuperadmin">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Campus <span class="text-red-500">*</span></label>
                     <select v-model="importCampusId" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-gray-200">
@@ -480,7 +480,7 @@
                         <option v-for="c in campuses" :key="c.campus_id" :value="c.campus_id">{{ c.name }}</option>
                     </select>
                 </div>
-                <div :class="{ 'col-span-2': !isSuperadmin }">
+                <div :style="!isSuperadmin ? 'grid-column:1 / -1;' : ''">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Graduation year <span class="text-red-500">*</span></label>
                     <input type="number" v-model.number="importYear" min="1960" :max="new Date().getFullYear() + 1" placeholder="e.g. 2023" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-gray-200">
                 </div>
@@ -499,28 +499,28 @@
         </div>
 
         <div v-else class="text-sm">
-            <div class="grid grid-cols-2 gap-2 mb-3">
-                <div class="bg-green-50 dark:bg-green-900/30 rounded p-3"><span class="text-2xl font-bold text-green-700 dark:text-green-300">{{ importResult.imported }}</span><div class="text-gray-600 dark:text-gray-400">imported</div></div>
+            <div class="mb-3" style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">
+                <div class="bg-green-50 dark:bg-gray-700 rounded p-3"><span class="text-2xl font-bold text-green-700 dark:text-green-300">{{ importResult.imported }}</span><div class="text-gray-600 dark:text-gray-400">imported</div></div>
                 <div class="bg-gray-50 dark:bg-gray-700 rounded p-3"><span class="text-2xl font-bold text-gray-700 dark:text-gray-200">{{ importResult.skipped }}</span><div class="text-gray-600 dark:text-gray-400">skipped</div></div>
                 <div class="bg-gray-50 dark:bg-gray-700 rounded p-3"><span class="font-bold">{{ importResult.experience_rows }}</span> job entries</div>
                 <div class="bg-gray-50 dark:bg-gray-700 rounded p-3"><span class="font-bold">{{ importResult.placeholder_emails }}</span> temp emails</div>
             </div>
             <p class="text-gray-500 dark:text-gray-400 mb-3">{{ importResult.emailed || 0 }} credential email(s) sent.</p>
             <div v-if="importResult.warnings && importResult.warnings.length" class="mb-2">
-                <div class="font-semibold text-amber-600 dark:text-amber-400">Warnings</div>
-                <ul class="list-disc ml-5 max-h-32 overflow-y-auto text-gray-600 dark:text-gray-300">
+                <div class="font-semibold text-amber-600 dark:text-amber-400">Warnings ({{ importResult.warnings.length }})</div>
+                <ul class="list-disc ml-5 text-gray-600 dark:text-gray-300" style="max-height:8rem;overflow-y:auto;">
                     <li v-for="(w, i) in importResult.warnings" :key="'w'+i">{{ w }}</li>
                 </ul>
             </div>
             <div v-if="importResult.skipped_details && importResult.skipped_details.length" class="mb-2">
-                <div class="font-semibold text-gray-600 dark:text-gray-300">Skipped rows</div>
-                <ul class="list-disc ml-5 max-h-32 overflow-y-auto text-gray-600 dark:text-gray-300">
+                <div class="font-semibold text-gray-600 dark:text-gray-300">Skipped rows ({{ importResult.skipped_details.length }}{{ importResult.skipped > importResult.skipped_details.length ? ' of ' + importResult.skipped : '' }})</div>
+                <ul class="list-disc ml-5 text-gray-600 dark:text-gray-300" style="max-height:8rem;overflow-y:auto;">
                     <li v-for="(s, i) in importResult.skipped_details" :key="'s'+i">{{ s }}</li>
                 </ul>
             </div>
             <div v-if="importResult.errors && importResult.errors.length" class="mb-2">
-                <div class="font-semibold text-red-600 dark:text-red-400">Errors</div>
-                <ul class="list-disc ml-5 max-h-32 overflow-y-auto text-red-600 dark:text-red-400">
+                <div class="font-semibold text-red-600 dark:text-red-400">Errors ({{ importResult.errors.length }})</div>
+                <ul class="list-disc ml-5 text-red-600 dark:text-red-400" style="max-height:8rem;overflow-y:auto;">
                     <li v-for="(e, i) in importResult.errors" :key="'e'+i">{{ e }}</li>
                 </ul>
             </div>
