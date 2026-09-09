@@ -37,45 +37,64 @@ class Uploader
         return $relative === '' ? $root : $root.'/'.ltrim($relative, '/\\');
     }
 
-    private static array $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'];
+    private static array $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx'];
     private static int $maxBytes = 5 * 1024 * 1024; // 5 MB
 
     private static array $mimeToExtensions = [
         'image/jpeg' => ['jpg', 'jpeg'],
         'image/png' => ['png'],
         'image/gif' => ['gif'],
+        'image/webp' => ['webp'],
         'application/pdf' => ['pdf'],
         'application/msword' => ['doc'],
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => ['docx'],
         'application/zip' => ['docx'],
     ];
 
+    /**
+     * Human-readable reason the last store()/storeNamed() call returned null.
+     * Callers should surface this instead of silently dropping the file
+     * (e.g. "your account saved but the photo didn't" with no explanation).
+     */
+    public static ?string $lastError = null;
+
     public static function store(array $file, string $category): ?string
     {
+        self::$lastError = null;
+
         if (!self::isValidUpload($file)) {
-            return null;
+            return null; // isValidUpload() already set $lastError
         }
 
-        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        if (!in_array($ext, self::$allowedExtensions, true)) {
-            return null;
-        }
-
-        $mimeType = mime_content_type($file['tmp_name']);
+        // Trust the magic-byte MIME type over the (user-supplied, often wrong
+        // or uppercase) filename extension. A "screenshot.png" that is really
+        // JPEG data, a ".JPG", or a browser "copy image" saved as .webp all
+        // used to be rejected here with no message.
+        $mimeType = mime_content_type($file['tmp_name']) ?: '';
         $expectedExts = self::$mimeToExtensions[$mimeType] ?? null;
-        if ($expectedExts === null || !in_array($ext, $expectedExts, true)) {
+        if ($expectedExts === null) {
+            self::$lastError = 'Unsupported file type'
+                .($mimeType !== '' ? " ({$mimeType})" : '')
+                .'. Allowed: JPG, PNG, GIF, WEBP'
+                .(str_contains($category, 'logo') ? ', PDF, DOC.' : '.');
+
             return null;
         }
+        $ext = $expectedExts[0];
 
         $targetDir = self::basePath(trim($category, '/')).'/';
-        if (!is_dir($targetDir)) {
-            mkdir($targetDir, 0755, true);
+        if (!is_dir($targetDir) && !mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
+            self::$lastError = 'Server could not create the upload folder.';
+
+            return null;
         }
 
         $filename = uniqid($category.'_', true).'.'.$ext;
         $targetPath = $targetDir.$filename;
 
         if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+            self::$lastError = 'Server could not save the uploaded file (check upload folder permissions).';
+
             return null;
         }
 
@@ -84,31 +103,35 @@ class Uploader
 
     public static function storeNamed(array $file, string $category, array $allowedMimeTypes): ?string
     {
+        self::$lastError = null;
+
         if (!self::isValidUpload($file)) {
             return null;
         }
 
-        $mimeType = mime_content_type($file['tmp_name']);
-        if (!in_array($mimeType, $allowedMimeTypes, true)) {
-            return null;
-        }
-
-        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        $mimeType = mime_content_type($file['tmp_name']) ?: '';
         $expectedExts = self::$mimeToExtensions[$mimeType] ?? null;
-        if ($expectedExts === null || !in_array($ext, $expectedExts, true)) {
+        if (!in_array($mimeType, $allowedMimeTypes, true) || $expectedExts === null) {
+            self::$lastError = 'Unsupported file type'.($mimeType !== '' ? " ({$mimeType})" : '').'.';
+
             return null;
         }
+        $ext = $expectedExts[0];
 
         $targetDir = self::basePath(trim($category, '/')).'/';
-        if (!is_dir($targetDir)) {
-            mkdir($targetDir, 0755, true);
+        if (!is_dir($targetDir) && !mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
+            self::$lastError = 'Server could not create the upload folder.';
+
+            return null;
         }
 
-        $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', basename($file['name']));
-        $filename = uniqid('', true).'_'.$safeName;
+        $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', pathinfo($file['name'], PATHINFO_FILENAME));
+        $filename = uniqid('', true).'_'.$safeName.'.'.$ext;
         $targetPath = $targetDir.$filename;
 
         if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+            self::$lastError = 'Server could not save the uploaded file.';
+
             return null;
         }
 
@@ -117,15 +140,34 @@ class Uploader
 
     private static function isValidUpload(array $file): bool
     {
-        if (!isset($file['tmp_name'], $file['error']) || $file['error'] !== UPLOAD_ERR_OK) {
+        $err = $file['error'] ?? UPLOAD_ERR_NO_FILE;
+        if (!isset($file['tmp_name']) || $err !== UPLOAD_ERR_OK) {
+            self::$lastError = match ($err) {
+                UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'The image is too large for the server to accept.',
+                UPLOAD_ERR_PARTIAL => 'The upload was interrupted — please try again.',
+                UPLOAD_ERR_NO_FILE => 'No file was received by the server.',
+                UPLOAD_ERR_NO_TMP_DIR, UPLOAD_ERR_CANT_WRITE => 'Server upload configuration error.',
+                default => 'The file could not be uploaded.',
+            };
+
             return false;
         }
 
         if (!is_uploaded_file($file['tmp_name'])) {
+            self::$lastError = 'The file was not received as a valid upload.';
+
             return false;
         }
 
-        if (($file['size'] ?? 0) <= 0 || $file['size'] > self::$maxBytes) {
+        $size = $file['size'] ?? 0;
+        if ($size <= 0) {
+            self::$lastError = 'The selected file is empty.';
+
+            return false;
+        }
+        if ($size > self::$maxBytes) {
+            self::$lastError = 'The image is larger than the '.(self::$maxBytes / 1048576).' MB limit.';
+
             return false;
         }
 

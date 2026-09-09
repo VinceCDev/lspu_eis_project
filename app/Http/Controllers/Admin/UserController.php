@@ -81,7 +81,10 @@ class UserController extends Controller
         if ($request->hasFile('profile_pic')) {
             $category = $role === 'employer' ? 'logos' : 'profile_picture';
             $filename = Uploader::store($this->fileToArray($request->file('profile_pic')), $category);
-            $profilePic = $filename ? "uploads/{$category}/{$filename}" : null;
+            if (!$filename) {
+                return response()->json(['success' => false, 'message' => 'Photo not uploaded: '.(Uploader::$lastError ?: 'unsupported file.')]);
+            }
+            $profilePic = "uploads/{$category}/{$filename}";
         }
 
         $randomPassword = bin2hex(random_bytes(5));
@@ -161,7 +164,10 @@ class UserController extends Controller
             $profilePic = null;
             if ($request->hasFile('profile_pic')) {
                 $filename = Uploader::store($this->fileToArray($request->file('profile_pic')), 'profile_picture');
-                $profilePic = $filename ? 'uploads/profile_picture/'.$filename : null;
+                if (!$filename) {
+                    return response()->json(['success' => false, 'message' => 'Photo not updated: '.(Uploader::$lastError ?: 'unsupported file.')]);
+                }
+                $profilePic = 'uploads/profile_picture/'.$filename;
             }
             $campusId = Auth::role() === 'superadmin' && $request->has('campus_id')
                 ? (int) $request->input('campus_id')
@@ -185,7 +191,10 @@ class UserController extends Controller
             $companyLogo = null;
             if ($request->hasFile('profile_pic')) {
                 $filename = Uploader::store($this->fileToArray($request->file('profile_pic')), 'logos');
-                $companyLogo = $filename ? 'uploads/logos/'.$filename : null;
+                if (!$filename) {
+                    return response()->json(['success' => false, 'message' => 'Logo not updated: '.(Uploader::$lastError ?: 'unsupported file.')]);
+                }
+                $companyLogo = 'uploads/logos/'.$filename;
             }
             $accountModel->updateEmployer(
                 $userId,
@@ -206,7 +215,10 @@ class UserController extends Controller
         $profilePic = null;
         if ($request->hasFile('profile_pic')) {
             $filename = Uploader::store($this->fileToArray($request->file('profile_pic')), 'profile_picture');
-            $profilePic = $filename ? 'uploads/profile_picture/'.$filename : null;
+            if (!$filename) {
+                return response()->json(['success' => false, 'message' => 'Photo not updated: '.(Uploader::$lastError ?: 'unsupported file.')]);
+            }
+            $profilePic = 'uploads/profile_picture/'.$filename;
         }
         $accountModel->updateAlumni(
             $userId,
