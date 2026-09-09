@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\SiteSetting;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -60,6 +61,12 @@ class EmploymentReportImporter
 
     private bool $sendCredentialEmails;
 
+    /** Cache key suffix the frontend polls for a live % while the import runs (null = don't publish progress). */
+    private ?string $progressToken = null;
+    private int $progressTotal = 0;
+    private int $progressDone = 0;
+    private float $progressLastFlush = 0.0;
+
     private array $result = [
         'graduate_rows' => 0,
         'imported' => 0,
@@ -91,9 +98,35 @@ class EmploymentReportImporter
         }
     }
 
-    public function import(string $path, ?int $campusId, ?int $year): array
+    public function import(string $path, ?int $campusId, ?int $year, ?string $progressToken = null): array
     {
+        $this->progressToken = $progressToken ?: null;
+
         return $this->run($path, $campusId, $year, false);
+    }
+
+    /** Cache key the controller/frontend agree on for a given import token. */
+    public static function progressKey(string $token): string
+    {
+        return 'import:progress:'.$token;
+    }
+
+    private function publishProgress(string $phase, bool $force = false): void
+    {
+        if ($this->progressToken === null) {
+            return;
+        }
+        $now = microtime(true);
+        if (!$force && ($now - $this->progressLastFlush) < 0.25) {
+            return;
+        }
+        $this->progressLastFlush = $now;
+        Cache::put(self::progressKey($this->progressToken), [
+            'phase' => $phase,
+            'done' => $this->progressDone,
+            'total' => $this->progressTotal,
+            'imported' => $this->result['imported'],
+        ], 300);
     }
 
     /** Parse + map every row but write nothing (testing / pre-import preview). */
@@ -113,10 +146,15 @@ class EmploymentReportImporter
         // Keep number formats (so date cells read as "July 5, 2023" etc.),
         // but skip charts to save memory. rangeToArray below is what makes
         // this fast; per-cell reads were the bottleneck.
+        $this->publishProgress('reading', true);
+
         $reader = IOFactory::createReaderForFile($path);
         $reader->setIncludeCharts(false);
         $book = $reader->load($path);
 
+        // First pass: read every sheet's grid + header once, and total up the
+        // data rows so the progress bar has a real denominator.
+        $pending = [];
         foreach ($book->getAllSheets() as $sheet) {
             $title = $sheet->getTitle();
             $rows = $this->sheetGrid($sheet);
@@ -127,12 +165,22 @@ class EmploymentReportImporter
 
                 continue;
             }
+            $dataRows = max(0, count($rows) - $map['_data_from']);
+            $this->progressTotal += $dataRows;
+            $pending[] = [$title, $rows, $map];
+        }
+        $this->publishProgress('importing', true);
 
+        // Second pass: process rows, ticking progress as we go.
+        foreach ($pending as [$title, $rows, $map]) {
             $count = 0;
             foreach ($rows as $rowNo => $cells) {
                 if ($rowNo <= $map['_data_from']) {
                     continue;
                 }
+                $this->progressDone++;
+                $this->publishProgress('importing');
+
                 $rec = $this->readRecord($cells, $map);
                 if (!$this->isGraduate($rec)) {
                     continue;
@@ -148,6 +196,8 @@ class EmploymentReportImporter
             }
             $this->result['sheets'][$title] = "{$count} graduate rows";
         }
+        $this->progressDone = $this->progressTotal;
+        $this->publishProgress('done', true);
 
         $this->result['errors'] = array_slice($this->result['errors'], 0, 100);
         $this->result['warnings'] = array_slice(array_values(array_unique($this->result['warnings'])), 0, 100);
