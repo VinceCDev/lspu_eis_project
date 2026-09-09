@@ -54,7 +54,7 @@ $rolePrefix = \App\Core\Auth::role() === 'superadmin' ? 'superadmin' : 'admin';
             </div>
             <div class="relative profile-dropdown-wrapper">
                 <div class="cursor-pointer flex items-center" @click="toggleProfileDropdown()">
-                    <img :src="profile.profile_pic || '<?= asset('assets/images/logo.png') ?>'" alt="Profile" class="w-10 h-10 rounded-full border-2 border-gray-200 dark:border-gray-500">
+                    <img :src="profile.profile_pic || '<?= asset('assets/images/logo-sm.png') ?>'" alt="Profile" class="w-10 h-10 rounded-full border-2 border-gray-200 dark:border-gray-500">
                     <span class="ml-2 font-medium text-gray-700 dark:text-gray-200">{{ profile.name ? profile.name.split(' ')[0] : 'Admin' }}</span>
                     <i class="fas fa-chevron-down ml-2 text-xs transition-transform duration-200 text-gray-700 dark:text-gray-200" :class="{'rotate-180': profileDropdownOpen}"></i>
                 </div>

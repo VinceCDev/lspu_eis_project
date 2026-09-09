@@ -94,6 +94,41 @@ class DashboardStats
         return self::COLLEGE_ABBREVIATIONS[$name] ?? $name;
     }
 
+    /** The five chart buckets that carry an active job, plus a catch-all for employed alumni whose status is blank/unrecognised. */
+    public const EMPLOYED_STATUS_BUCKETS = ['Probational', 'Contractual', 'Regular', 'Self-employed', 'Employed (Other)'];
+
+    /**
+     * Fold the free-text `alumni_experience.employment_status` values that
+     * actually occur in the data — imports and legacy rows write
+     * "Probationary", "Self-Employed", "Freelance", "Project Based", and a
+     * large number of NULL/blank statuses — into the fixed buckets the
+     * dashboard's "Employment Status per Program" chart renders.
+     *
+     * Without this fold, every row whose status is not spelled EXACTLY like a
+     * bucket ("Self-employed" vs "Self-Employed", "Probational" vs
+     * "Probationary") matched none of the buckets and was silently dropped by
+     * the `isset($programs[$program][$status])` guard, so employed alumni
+     * vanished from the chart and only the anti-join "Unemployed" count and
+     * the two exact-match statuses ("Regular", "Contractual") showed.
+     *
+     * A row reaching this method already has an ACTIVE experience row, so a
+     * blank/unknown status is still "employed" — it goes to "Employed (Other)"
+     * rather than being discarded.
+     */
+    public static function canonicalEmployedStatus(?string $raw): string
+    {
+        $s = strtolower(trim((string) $raw));
+
+        return match (true) {
+            $s === '' => 'Employed (Other)',
+            str_contains($s, 'probation') => 'Probational',           // Probationary, Probational
+            str_contains($s, 'regular'), $s === 'permanent' => 'Regular',
+            str_contains($s, 'self'), str_contains($s, 'freelance'), str_contains($s, 'business'), str_contains($s, 'entrepreneur') => 'Self-employed',
+            str_contains($s, 'contract'), str_contains($s, 'project'), str_contains($s, 'casual'), str_contains($s, 'job order'), $s === 'cos' => 'Contractual',
+            default => 'Employed (Other)',
+        };
+    }
+
     private function abbreviateCourse(string $name): string
     {
         if (isset(self::COURSE_ABBREVIATIONS[$name])) {
@@ -184,7 +219,7 @@ class DashboardStats
     /** Groups by the same college-aware normalized program name as Reports (Report::normalizeProgram()). */
     public function employmentStatusPerProgram(): array
     {
-        $statusLabels = ['Probational', 'Contractual', 'Regular', 'Self-employed', 'Unemployed'];
+        $statusLabels = [...self::EMPLOYED_STATUS_BUCKETS, 'Unemployed'];
         $programs = [];
 
         foreach ($this->selectAll('SELECT course, college FROM alumni'.$this->campusClause('alumni', true).' GROUP BY course, college') as $row) {
@@ -203,7 +238,7 @@ class DashboardStats
                                    GROUP BY a.course, a.college, e.employment_status";
         foreach ($this->selectAll($sql, [$currentDate]) as $row) {
             $program = $this->abbreviateCourse(Report::normalizeProgram($row['college'], $row['course']));
-            $status = $row['employment_status'];
+            $status = self::canonicalEmployedStatus($row['employment_status']);
             if (isset($programs[$program][$status])) {
                 $programs[$program][$status] += (int) $row['cnt'];
             }
@@ -251,7 +286,7 @@ class DashboardStats
             return [];
         }
 
-        $statusLabels = ['Probational', 'Contractual', 'Regular', 'Self-employed', 'Unemployed'];
+        $statusLabels = [...self::EMPLOYED_STATUS_BUCKETS, 'Unemployed'];
         $in = implode(',', $campusIds);
         $currentDate = date('Y-m-d');
 
@@ -282,7 +317,7 @@ class DashboardStats
         ) as $row) {
             $cid = (int) $row['campus_id'];
             $program = $this->abbreviateCourse(Report::normalizeProgram($row['college'], $row['course']));
-            $status = $row['employment_status'];
+            $status = self::canonicalEmployedStatus($row['employment_status']);
             if (isset($out[$cid][$program][$status])) {
                 $out[$cid][$program][$status] += (int) $row['cnt'];
             }

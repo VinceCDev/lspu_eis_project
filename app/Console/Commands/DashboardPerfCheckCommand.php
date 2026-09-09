@@ -196,7 +196,10 @@ class DashboardPerfCheckCommand extends Command
     /* ---- original (pre-C3) employmentStatusPerProgram, Unemployed via NOT IN ---- */
     private function oldEmploymentStatusPerProgram(string $scope): array
     {
-        $labels = ['Probational', 'Contractual', 'Regular', 'Self-employed', 'Unemployed'];
+        // Same buckets + status fold as the model — C3's comparison is meant to
+        // isolate `NOT IN` vs anti-join for the Unemployed count, NOT the
+        // separate employment_status canonicalisation fix.
+        $labels = [...DashboardStats::EMPLOYED_STATUS_BUCKETS, 'Unemployed'];
         $programs = [];
         $norm = fn ($college, $course) => \App\Models\Report::normalizeProgram($college, $course);
         // reuse the model's private abbreviateCourse via reflection
@@ -214,8 +217,9 @@ class DashboardPerfCheckCommand extends Command
             WHERE (e.current = 1 OR (e.end_date IS NULL OR e.end_date >= ?)){$scope}
             GROUP BY a.course, a.college, e.employment_status", [$today]) as $r) {
             $p = $abbr->invoke($ds, $norm($r->college, $r->course));
-            if (isset($programs[$p][$r->employment_status])) {
-                $programs[$p][$r->employment_status] += (int) $r->cnt;
+            $st = DashboardStats::canonicalEmployedStatus($r->employment_status);
+            if (isset($programs[$p][$st])) {
+                $programs[$p][$st] += (int) $r->cnt;
             }
         }
         foreach (DB::select("SELECT a.course, a.college, COUNT(*) as cnt FROM alumni a
