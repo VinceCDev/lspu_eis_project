@@ -40,6 +40,7 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # --- PHP config --------------------------------------------------------
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/zz-app.ini
+COPY docker/php/www.conf /usr/local/etc/php-fpm.d/zz-www.conf
 
 WORKDIR /var/www/html
 

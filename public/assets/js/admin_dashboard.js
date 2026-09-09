@@ -59,47 +59,27 @@ createApp({
     mounted() {
         this.applyDarkMode();
         document.addEventListener('click', this.handleClickOutsideProfile);
-        // Kick off the visualization libs now (not render-blocking) so they
-        // download in parallel with the data fetches below; the render
-        // methods await these same (cached) promises before drawing.
-        if (window.LibLoader) { LibLoader.ensureChart(); LibLoader.ensureLeaflet(); }
-        // Fetch dashboard stats and then initialize charts and map
-        fetch('/admin_dashboard?action=stats')
-            .then(res => res.json())
-            .then(data => {
-                this.dashboardStats = data;
-                setTimeout(() => {
-                    this.initCharts();
-                    this.initMap();
-                    this.showLogoutModal = false; // Ensure modal is hidden on load
-                }, 100);
-            })
-            .catch(error => console.error('Error fetching dashboard stats:', error));
-        // Fetched separately — it's the one chart backed by a live Gemini
-        // call, so it shouldn't hold up everything else on the page when
-        // that call is slow (or failing, e.g. an exhausted API quota).
-        fetch('/admin_dashboard?action=courseWorkAlignment')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    this.dashboardStats = this.dashboardStats || {};
-                    this.dashboardStats.course_work_alignment = data.course_work_alignment;
-                    this.renderAlignmentChart();
-                }
-            })
-            .catch(error => console.error('Error fetching course-work alignment:', error));
-        fetch('admin_profile?action=details')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.profile) {
-                    this.profile = data.profile;
-                }
-            })
-            .catch(error => console.error('Error fetching admin profile:', error));
-        // Loaded independently (and separately from the slower `stats` call
-        // above) so the campus list is ready to click as soon as possible.
-        this.fetchEmploymentStatusByCampus();
         window.addEventListener('resize', this.handleResize);
+
+        // The dev server (php artisan serve) is single-process and the fpm
+        // pool is small, so firing every dashboard AJAX at once monopolises
+        // the server and a navigation click ends up queued behind all of
+        // them. Instead: run them ONE AT A TIME, and abort whatever is
+        // in-flight (and skip the rest) the moment the user leaves the page,
+        // so the next page's request hits a free server immediately.
+        this._dashAbort = new AbortController();
+        this._onLeave = () => { try { this._dashAbort.abort(); } catch (e) {} };
+        window.addEventListener('pagehide', this._onLeave);
+
+        if (window.LibLoader) { LibLoader.ensureChart(); LibLoader.ensureLeaflet(); }
+
+        this.loadDashboardData();
+    },
+    beforeUnmount() {
+        window.removeEventListener('resize', this.handleResize);
+        window.removeEventListener('pagehide', this._onLeave);
+        document.removeEventListener('click', this.handleClickOutsideProfile);
+        try { this._dashAbort && this._dashAbort.abort(); } catch (e) {}
     },
     watch: {
         darkMode(val) {
@@ -158,13 +138,58 @@ createApp({
             this.charts = {};
             this.chartInitialized = false;
         },
-        async fetchEmploymentStatusByCampus() {
+        // Runs the dashboard's data requests sequentially (never more than one
+        // occupying the server at a time) so a navigation request can slot in
+        // between them, and bails out entirely if the user has navigated away.
+        async loadDashboardData() {
+            const signal = this._dashAbort.signal;
+            const getJson = async (url) => (await fetch(url, { signal })).json();
+            const gone = (e) => e && e.name === 'AbortError';
+
+            try {
+                // 1. profile — tiny; fills the header immediately
+                try {
+                    const p = await getJson('admin_profile?action=details');
+                    if (p && p.success && p.profile) this.profile = p.profile;
+                } catch (e) { if (gone(e)) return; }
+
+                // 2. stats — charts + map data
+                try {
+                    this.dashboardStats = await getJson('/admin_dashboard?action=stats');
+                    await this.$nextTick();
+                    this.initCharts();   // async, self-guarded; renders when Chart.js is ready
+                    this.showLogoutModal = false;
+                } catch (e) { if (gone(e)) return; }
+
+                // 3. per-campus employment status (campus buttons)
+                try { await this.fetchEmploymentStatusByCampus(signal); }
+                catch (e) { if (gone(e)) return; }
+
+                // 4. course-work alignment (one chart; can be the slowest)
+                try {
+                    const a = await getJson('/admin_dashboard?action=courseWorkAlignment');
+                    if (a && a.success) {
+                        this.dashboardStats = this.dashboardStats || {};
+                        this.dashboardStats.course_work_alignment = a.course_work_alignment;
+                        this.renderAlignmentChart();
+                    }
+                } catch (e) { if (gone(e)) return; }
+
+                // 5. map last — its geocode call is the slowest tail; if the
+                //    user already navigated we never even fire it.
+                if (!signal.aborted) this.initMap();
+            } catch (e) {
+                if (!gone(e)) console.error('Dashboard data load failed:', e);
+            }
+        },
+        async fetchEmploymentStatusByCampus(signal) {
             this.employmentStatusLoading = true;
             try {
-                const res = await fetch('/admin_dashboard?action=employmentStatusByCampus');
+                const res = await fetch('/admin_dashboard?action=employmentStatusByCampus', signal ? { signal } : undefined);
                 const data = await res.json();
                 this.employmentStatusByCampus = data.success ? data.campuses : [];
             } catch (error) {
+                if (error && error.name === 'AbortError') throw error;
                 console.error('Error fetching employment status by campus:', error);
                 this.employmentStatusByCampus = [];
             }
@@ -542,7 +567,8 @@ createApp({
                 const response = await fetch('/admin_dashboard?action=geocode', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ locations })
+                    body: JSON.stringify({ locations }),
+                    signal: this._dashAbort ? this._dashAbort.signal : undefined
                 });
                 const data = await response.json();
                 return data.success ? data.coordinates : {};

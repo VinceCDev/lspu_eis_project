@@ -25,6 +25,9 @@ class AlignmentService
     /** @var array<string, string> cache_key => label, warmed by preload() to skip a DB round-trip per classifyOne() call */
     private array $memo = [];
 
+    /** @var array<string, true> keys preload() has already looked up (hit OR miss) — a miss here must NOT trigger a per-pair cache->get() */
+    private array $checked = [];
+
     private int $liveLookups = 0;
 
     private int $geminiFailures = 0;
@@ -69,6 +72,9 @@ class AlignmentService
             return;
         }
 
+        foreach ($pairs as [$course, $title]) {
+            $this->checked[AlignmentCache::key($course, $title)] = true;
+        }
         $this->memo += $this->cache->getMany($pairs);
     }
 
@@ -125,11 +131,15 @@ class AlignmentService
             return $this->memo[$key];
         }
 
-        $cached = $this->cache->get($course, $jobTitle);
-        if ($cached !== null) {
-            $this->memo[$key] = $cached;
+        // Only hit the DB per-pair when preload() hasn't already covered this
+        // key (a preload miss stays a miss — no N+1 of one SELECT per pair).
+        if (!isset($this->checked[$key])) {
+            $cached = $this->cache->get($course, $jobTitle);
+            if ($cached !== null) {
+                $this->memo[$key] = $cached;
 
-            return $cached;
+                return $cached;
+            }
         }
 
         // Past the per-request budget, or once Gemini has clearly failed
