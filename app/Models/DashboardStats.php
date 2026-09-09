@@ -149,26 +149,33 @@ class DashboardStats
         return $prefix.$acronym;
     }
 
+    /**
+     * C2: one grouped query instead of loading every alumnus + every
+     * "employed" id into PHP. Output is unchanged:
+     *   [abbrevCollege => ['graduates' => int, 'employed' => int]].
+     *
+     * "employed" keeps the original meaning: a distinct alumnus who has at
+     * least one experience row that is current, or has no end date, or
+     * whose end date is today or later.
+     */
     private function graduatesPerCollege(): array
     {
+        $sql = 'SELECT a.college,
+                       COUNT(DISTINCT a.alumni_id) AS graduates,
+                       COUNT(DISTINCT CASE
+                             WHEN e.current = 1 OR e.end_date IS NULL OR e.end_date >= CURDATE()
+                             THEN e.alumni_id END) AS employed
+                FROM alumni a
+                LEFT JOIN alumni_experience e ON e.alumni_id = a.alumni_id'
+                .$this->campusClause('a', true).'
+                GROUP BY a.college';
+
         $colleges = [];
-        foreach ($this->selectAll('SELECT college, COUNT(*) as graduates FROM alumni'.$this->campusClause('alumni', true).' GROUP BY college') as $row) {
+        foreach ($this->selectAll($sql) as $row) {
             $colleges[$this->abbreviateCollege($row['college'])] = [
                 'graduates' => (int) $row['graduates'],
-                'employed' => 0,
+                'employed' => (int) $row['employed'],
             ];
-        }
-
-        $employedIds = [];
-        foreach ($this->selectAll('SELECT DISTINCT alumni_id FROM alumni_experience WHERE current = 1 OR (end_date IS NULL OR end_date >= CURDATE())') as $row) {
-            $employedIds[(int) $row['alumni_id']] = true;
-        }
-
-        foreach ($this->selectAll('SELECT alumni_id, college FROM alumni'.$this->campusClause('alumni', true)) as $row) {
-            $college = $this->abbreviateCollege($row['college']);
-            if (isset($employedIds[(int) $row['alumni_id']])) {
-                ++$colleges[$college]['employed'];
-            }
         }
 
         return $colleges;
@@ -202,13 +209,18 @@ class DashboardStats
             }
         }
 
+        // C3: anti-join instead of `NOT IN (SELECT ...)`. Same set — alumni
+        // with no experience row that is current / open-ended / not-yet-ended —
+        // but MySQL can drive it from an index instead of materialising every
+        // "employed" id. COUNT(*) here is one row per non-matching alumnus
+        // (the LEFT JOIN yields exactly one NULL row for those), so it stays
+        // a straight alumni count.
         $sql = 'SELECT a.course, a.college, COUNT(*) as cnt
                                    FROM alumni a
-                                   WHERE a.alumni_id NOT IN (
-                                       SELECT DISTINCT alumni_id
-                                       FROM alumni_experience
-                                       WHERE current = 1 OR (end_date IS NULL OR end_date >= CURDATE())
-                                   )'
+                                   LEFT JOIN alumni_experience e
+                                     ON e.alumni_id = a.alumni_id
+                                    AND (e.current = 1 OR e.end_date IS NULL OR e.end_date >= CURDATE())
+                                   WHERE e.alumni_id IS NULL'
                                    .$this->campusClause('a')
                                    .' GROUP BY a.course, a.college';
         foreach ($this->selectAll($sql) as $row) {
@@ -219,6 +231,109 @@ class DashboardStats
         }
 
         return $programs;
+    }
+
+    /**
+     * C4: campus-grouped variant of employmentStatusPerProgram(). Computes
+     * the per-program employment-status breakdown for MANY campuses in 3
+     * queries total (was 3 queries PER campus in a loop). Returns
+     *   [campusId => [program => [status => count]]].
+     *
+     * Only the given campus ids are queried, so a scoped admin can never
+     * pull another campus's numbers.
+     *
+     * @param  int[]  $campusIds
+     */
+    public function employmentStatusPerProgramByCampus(array $campusIds): array
+    {
+        $campusIds = array_values(array_unique(array_map('intval', $campusIds)));
+        if (empty($campusIds)) {
+            return [];
+        }
+
+        $statusLabels = ['Probational', 'Contractual', 'Regular', 'Self-employed', 'Unemployed'];
+        $in = implode(',', $campusIds);
+        $currentDate = date('Y-m-d');
+
+        // 1. Program keys per campus (so programs with zero employment still show).
+        $out = [];
+        foreach ($this->selectAll(
+            "SELECT a.campus_id, a.course, a.college
+             FROM alumni a
+             WHERE a.campus_id IN ({$in})
+             GROUP BY a.campus_id, a.course, a.college"
+        ) as $row) {
+            $cid = (int) $row['campus_id'];
+            $program = $this->abbreviateCourse(Report::normalizeProgram($row['college'], $row['course']));
+            if (!isset($out[$cid][$program])) {
+                $out[$cid][$program] = array_fill_keys($statusLabels, 0);
+            }
+        }
+
+        // 2. Active-experience status counts per campus/program.
+        foreach ($this->selectAll(
+            "SELECT a.campus_id, a.course, a.college, e.employment_status, COUNT(DISTINCT a.alumni_id) AS cnt
+             FROM alumni a
+             JOIN alumni_experience e ON e.alumni_id = a.alumni_id
+             WHERE (e.current = 1 OR e.end_date IS NULL OR e.end_date >= ?)
+               AND a.campus_id IN ({$in})
+             GROUP BY a.campus_id, a.course, a.college, e.employment_status",
+            [$currentDate]
+        ) as $row) {
+            $cid = (int) $row['campus_id'];
+            $program = $this->abbreviateCourse(Report::normalizeProgram($row['college'], $row['course']));
+            $status = $row['employment_status'];
+            if (isset($out[$cid][$program][$status])) {
+                $out[$cid][$program][$status] += (int) $row['cnt'];
+            }
+        }
+
+        // 3. Unemployed (no active experience) per campus/program — anti-join.
+        foreach ($this->selectAll(
+            "SELECT a.campus_id, a.course, a.college, COUNT(*) AS cnt
+             FROM alumni a
+             LEFT JOIN alumni_experience e
+               ON e.alumni_id = a.alumni_id
+              AND (e.current = 1 OR e.end_date IS NULL OR e.end_date >= CURDATE())
+             WHERE e.alumni_id IS NULL
+               AND a.campus_id IN ({$in})
+             GROUP BY a.campus_id, a.course, a.college"
+        ) as $row) {
+            $cid = (int) $row['campus_id'];
+            $program = $this->abbreviateCourse(Report::normalizeProgram($row['college'], $row['course']));
+            if (isset($out[$cid][$program])) {
+                $out[$cid][$program]['Unemployed'] += (int) $row['cnt'];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * C4: distinct colleges for many campuses in one query.
+     *
+     * @param  int[]  $campusIds
+     * @return array<int, string[]>  campusId => sorted college names
+     */
+    public function collegesByCampus(array $campusIds): array
+    {
+        $campusIds = array_values(array_unique(array_map('intval', $campusIds)));
+        if (empty($campusIds)) {
+            return [];
+        }
+        $in = implode(',', $campusIds);
+
+        $out = [];
+        foreach ($this->selectAll(
+            "SELECT DISTINCT campus_id, college
+             FROM alumni
+             WHERE campus_id IN ({$in}) AND college IS NOT NULL AND college <> ''
+             ORDER BY college"
+        ) as $row) {
+            $out[(int) $row['campus_id']][] = $row['college'];
+        }
+
+        return $out;
     }
 
     private function workLocationDistribution(): array
@@ -346,58 +461,137 @@ class DashboardStats
         ];
     }
 
+    /**
+     * C1: location CLUSTERS, not every alumnus. One grouped query; the
+     * result is bounded by (distinct locations x distinct courses), not by
+     * the alumni count, so it stays small at 100k+ records. The per-location
+     * alumni list is fetched lazily by alumniAtLocation() when a marker
+     * popup is opened.
+     *
+     * @return array<string, array{city:string, province:string, count:int, employed:int, top_courses: array<int, array{course:string, count:int}>}>
+     */
     public function alumniMap(): array
     {
-        $map = [];
-        $rows = $this->selectAll("SELECT a.alumni_id, a.first_name, a.middle_name, a.last_name, a.profile_pic, a.course, a.year_graduated, a.city, a.province, a.college FROM alumni a WHERE a.city IS NOT NULL AND a.city != '' AND a.province IS NOT NULL AND a.province != ''".$this->campusClause('a'));
+        $sql = "SELECT a.city, a.province, a.course,
+                       COUNT(DISTINCT a.alumni_id) AS n,
+                       COUNT(DISTINCT CASE
+                             WHEN e.current = 1 OR e.end_date IS NULL OR e.end_date >= CURDATE()
+                             THEN e.alumni_id END) AS employed
+                FROM alumni a
+                LEFT JOIN alumni_experience e ON e.alumni_id = a.alumni_id
+                WHERE a.city IS NOT NULL AND a.city <> '' AND a.province IS NOT NULL AND a.province <> ''"
+                .$this->campusClause('a').'
+                GROUP BY a.city, a.province, a.course';
 
-        $latestExperience = [];
-        foreach ($this->selectAll("SELECT alumni_id, title, company, start_date, end_date, description, employment_status, location_of_work
-            FROM alumni_experience
-            WHERE current = 1 OR (end_date IS NULL OR end_date >= CURDATE())
-            ORDER BY alumni_id, start_date DESC") as $row) {
-            $alumniId = (int) $row['alumni_id'];
-            if (!isset($latestExperience[$alumniId])) {
-                $latestExperience[$alumniId] = $row;
-            }
-        }
-
-        foreach ($rows as $row) {
-            $locationKey = $row['city'].', '.$row['province'];
-            $alumniId = (int) $row['alumni_id'];
-            $expRow = $latestExperience[$alumniId] ?? null;
-
-            $work = '';
-            $workDetails = null;
-            $employmentStatus = 'Unemployed';
-
-            if ($expRow) {
-                $work = $expRow['title'].' at '.$expRow['company'];
-                $workDetails = [
-                    'title' => $expRow['title'],
-                    'company' => $expRow['company'],
-                    'start_date' => $expRow['start_date'],
-                    'end_date' => $expRow['end_date'],
-                    'description' => $expRow['description'],
-                    'employment_status' => $expRow['employment_status'],
-                    'location_of_work' => $expRow['location_of_work'],
+        $clusters = [];
+        foreach ($this->selectAll($sql) as $row) {
+            $key = $row['city'].', '.$row['province'];
+            if (!isset($clusters[$key])) {
+                $clusters[$key] = [
+                    'city' => $row['city'],
+                    'province' => $row['province'],
+                    'count' => 0,
+                    'employed' => 0,
+                    '_courses' => [],
                 ];
-                $employmentStatus = 'Employed';
             }
-
-            $map[$locationKey][] = [
-                'name' => trim($row['first_name'].' '.$row['middle_name'].' '.$row['last_name']),
-                'profile_pic' => $row['profile_pic'] ? 'uploads/profile_picture/'.$row['profile_pic'] : null,
-                'course' => $row['course'],
-                'college' => $row['college'],
-                'year_graduated' => $row['year_graduated'],
-                'work' => $work,
-                'work_details' => $workDetails,
-                'status' => $employmentStatus,
-            ];
+            $clusters[$key]['count'] += (int) $row['n'];
+            $clusters[$key]['employed'] += (int) $row['employed'];
+            if ($row['course'] !== null && $row['course'] !== '') {
+                $clusters[$key]['_courses'][$row['course']] = (int) $row['n'];
+            }
         }
 
-        return $map;
+        foreach ($clusters as &$c) {
+            arsort($c['_courses']);
+            $top = [];
+            foreach (array_slice($c['_courses'], 0, 3, true) as $course => $n) {
+                $top[] = ['course' => $course, 'count' => $n];
+            }
+            $c['top_courses'] = $top;
+            unset($c['_courses']);
+        }
+        unset($c);
+
+        return $clusters;
+    }
+
+    /**
+     * C1: paginated alumni for one location, loaded on demand when a map
+     * marker popup is opened. Only the fields the popup renders, one page
+     * at a time — never the whole location.
+     *
+     * @return array{total:int, page:int, per_page:int, alumni: array<int, array<string, mixed>>}
+     */
+    public function alumniAtLocation(string $city, string $province, int $limit = 20, int $offset = 0): array
+    {
+        $limit = max(1, min($limit, 100));
+        $offset = max(0, $offset);
+
+        $total = (int) ($this->selectOne(
+            'SELECT COUNT(*) AS c FROM alumni a WHERE a.city = ? AND a.province = ?'.$this->campusClause('a'),
+            [$city, $province]
+        )['c'] ?? 0);
+
+        $rows = $this->selectAll(
+            'SELECT a.alumni_id, a.first_name, a.middle_name, a.last_name, a.profile_pic,
+                    a.course, a.college, a.year_graduated
+             FROM alumni a
+             WHERE a.city = ? AND a.province = ?'.$this->campusClause('a').'
+             ORDER BY a.last_name, a.first_name
+             LIMIT '.$limit.' OFFSET '.$offset,
+            [$city, $province]
+        );
+
+        $alumni = [];
+        if (!empty($rows)) {
+            $ids = array_map(static fn ($r) => (int) $r['alumni_id'], $rows);
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+            $latest = [];
+            foreach ($this->selectAll(
+                "SELECT alumni_id, title, company, start_date, end_date, description, employment_status, location_of_work
+                 FROM alumni_experience
+                 WHERE alumni_id IN ({$placeholders})
+                   AND (current = 1 OR end_date IS NULL OR end_date >= CURDATE())
+                 ORDER BY alumni_id, start_date DESC",
+                $ids
+            ) as $row) {
+                $aid = (int) $row['alumni_id'];
+                if (!isset($latest[$aid])) {
+                    $latest[$aid] = $row;
+                }
+            }
+
+            foreach ($rows as $row) {
+                $aid = (int) $row['alumni_id'];
+                $exp = $latest[$aid] ?? null;
+                $alumni[] = [
+                    'name' => trim($row['first_name'].' '.$row['middle_name'].' '.$row['last_name']),
+                    'profile_pic' => $row['profile_pic'] ? 'uploads/profile_picture/'.$row['profile_pic'] : null,
+                    'course' => $row['course'],
+                    'college' => $row['college'],
+                    'year_graduated' => $row['year_graduated'],
+                    'status' => $exp ? 'Employed' : 'Unemployed',
+                    'work_details' => $exp ? [
+                        'title' => $exp['title'],
+                        'company' => $exp['company'],
+                        'start_date' => $exp['start_date'],
+                        'end_date' => $exp['end_date'],
+                        'description' => $exp['description'],
+                        'employment_status' => $exp['employment_status'],
+                        'location_of_work' => $exp['location_of_work'],
+                    ] : null,
+                ];
+            }
+        }
+
+        return [
+            'total' => $total,
+            'page' => (int) floor($offset / $limit) + 1,
+            'per_page' => $limit,
+            'alumni' => $alumni,
+        ];
     }
 
     public function chartBreakdowns(): array

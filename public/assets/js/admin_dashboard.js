@@ -436,26 +436,83 @@ createApp({
                 }).addTo(map);
 
                 if (this.dashboardStats && this.dashboardStats.alumni_map) {
+                    // C1: the payload is now one summary per location. The
+                    // per-alumnus list is fetched lazily when a popup opens.
                     const entries = Object.entries(this.dashboardStats.alumni_map);
-                    const addMarker = (location, alumniList, lat, lng) => {
-                        const popupHtml = alumniList.map(a =>
-                            `<div style='margin-bottom:10px;'>
-                                ${a.profile_pic ? `<div style='text-align:center;margin-bottom:4px;'><img src='${a.profile_pic}' style='width:48px;height:48px;object-fit:cover;border-radius:50%;border:2px solid #3b82f6;'></div>` : ''}
-                                <b>${a.name}</b><br>
-                                <span style='font-size:12px;'>${a.course} (${a.year_graduated})</span><br>
-                                <span style='font-size:12px;'>Status: <b>${a.status}</b></span><br>
-                                ${a.status === 'Employed' && a.work_details ? `
-                                    <div style='margin-top:4px; padding-left:8px; border-left:2px solid #3b82f6;'>
-                                        <span style='font-size:12px;'><b>Position:</b> ${a.work_details.title}</span><br>
-                                        <span style='font-size:12px;'><b>Company:</b> ${a.work_details.company}</span><br>
-                                        <span style='font-size:12px;'><b>From:</b> ${a.work_details.start_date || '-'} <b>To:</b> ${a.work_details.end_date || 'Present'}</span><br>
-                                        <span style='font-size:12px;'><b>Description:</b> ${a.work_details.description || '-'}</span>
-                                    </div>
-                                ` : ''}
-                            </div>`
-                        ).join('<hr style="margin:6px 0;">');
-                        L.marker([lat, lng]).addTo(map)
-                            .bindPopup(`<b>${location}</b><br><br>${popupHtml}`);
+
+                    const summaryHtml = (location, cluster) => {
+                        const courses = (cluster.top_courses || [])
+                            .map(c => `<span style='font-size:12px;'>${c.course} <b>(${c.count})</b></span>`)
+                            .join('<br>');
+                        return `<div class='alumni-cluster' data-city="${encodeURIComponent(cluster.city)}" data-province="${encodeURIComponent(cluster.province)}">
+                            <b>${location}</b><br><br>
+                            <span style='font-size:12px;'>Alumni: <b>${cluster.count}</b> &nbsp;|&nbsp; Employed: <b>${cluster.employed}</b></span>
+                            ${courses ? `<div style='margin-top:6px;'>${courses}</div>` : ''}
+                            <button type='button' class='alumni-cluster-view'
+                                style='margin-top:8px;padding:4px 10px;font-size:12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;'>
+                                View alumni (${cluster.count})
+                            </button>
+                        </div>`;
+                    };
+
+                    const alumniCardHtml = (a) => `
+                        <div style='margin-bottom:10px;'>
+                            ${a.profile_pic ? `<div style='text-align:center;margin-bottom:4px;'><img src='${a.profile_pic}' style='width:48px;height:48px;object-fit:cover;border-radius:50%;border:2px solid #3b82f6;'></div>` : ''}
+                            <b>${a.name}</b><br>
+                            <span style='font-size:12px;'>${a.course} (${a.year_graduated})</span><br>
+                            <span style='font-size:12px;'>Status: <b>${a.status}</b></span><br>
+                            ${a.status === 'Employed' && a.work_details ? `
+                                <div style='margin-top:4px; padding-left:8px; border-left:2px solid #3b82f6;'>
+                                    <span style='font-size:12px;'><b>Position:</b> ${a.work_details.title}</span><br>
+                                    <span style='font-size:12px;'><b>Company:</b> ${a.work_details.company}</span><br>
+                                    <span style='font-size:12px;'><b>From:</b> ${a.work_details.start_date || '-'} <b>To:</b> ${a.work_details.end_date || 'Present'}</span><br>
+                                    <span style='font-size:12px;'><b>Description:</b> ${a.work_details.description || '-'}</span>
+                                </div>
+                            ` : ''}
+                        </div>`;
+
+                    const listHtml = (location, city, province, data, page) => {
+                        const pages = Math.max(1, Math.ceil(data.total / data.per_page));
+                        const cards = data.alumni.map(alumniCardHtml).join('<hr style="margin:6px 0;">');
+                        return `<div class='alumni-cluster-list' data-city="${encodeURIComponent(city)}" data-province="${encodeURIComponent(province)}" data-page="${page}" data-pages="${pages}">
+                            <b>${location}</b> <span style='font-size:12px;color:#6b7280;'>(${data.total} alumni)</span><br><br>
+                            ${cards || `<span style='font-size:12px;'>No alumni found.</span>`}
+                            <div style='display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;'>
+                                <button type='button' class='alumni-page-prev' ${page <= 1 ? 'disabled' : ''} style='padding:3px 8px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;'>‹ Prev</button>
+                                <span>Page ${page} / ${pages}</span>
+                                <button type='button' class='alumni-page-next' ${page >= pages ? 'disabled' : ''} style='padding:3px 8px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;'>Next ›</button>
+                            </div>
+                        </div>`;
+                    };
+
+                    const loadPage = async (marker, city, province, location, page) => {
+                        const popup = marker.getPopup();
+                        popup.setContent(`<b>${location}</b><br><br><span style='font-size:12px;'>Loading…</span>`);
+                        try {
+                            const res = await fetch(`/admin_dashboard?action=alumniAtLocation&city=${encodeURIComponent(city)}&province=${encodeURIComponent(province)}&page=${page}`);
+                            const data = await res.json();
+                            if (!data.success) { popup.setContent(`<b>${location}</b><br><br><span style='font-size:12px;'>Could not load alumni.</span>`); return; }
+                            popup.setContent(listHtml(location, city, province, data, page));
+                        } catch (e) {
+                            popup.setContent(`<b>${location}</b><br><br><span style='font-size:12px;'>Could not load alumni.</span>`);
+                        }
+                    };
+
+                    const addMarker = (location, cluster, lat, lng) => {
+                        const marker = L.marker([lat, lng]).addTo(map).bindPopup(summaryHtml(location, cluster));
+                        marker.on('popupopen', (e) => {
+                            const el = e.popup.getElement();
+                            if (!el) return;
+                            const viewBtn = el.querySelector('.alumni-cluster-view');
+                            if (viewBtn) {
+                                viewBtn.onclick = () => loadPage(marker, cluster.city, cluster.province, location, 1);
+                            }
+                            const prev = el.querySelector('.alumni-page-prev');
+                            const next = el.querySelector('.alumni-page-next');
+                            const wrap = el.querySelector('.alumni-cluster-list');
+                            if (wrap && prev) prev.onclick = () => loadPage(marker, cluster.city, cluster.province, location, Math.max(1, parseInt(wrap.dataset.page, 10) - 1));
+                            if (wrap && next) next.onclick = () => loadPage(marker, cluster.city, cluster.province, location, Math.min(parseInt(wrap.dataset.pages, 10), parseInt(wrap.dataset.page, 10) + 1));
+                        });
                     };
 
                     // Geocoded server-side (and cached there permanently) instead of through
@@ -463,9 +520,9 @@ createApp({
                     // is no longer reachable, which was silently collapsing every location
                     // onto the same fallback point and making the whole map look like one marker.
                     const coordinates = await this.geocodeLocations(entries.map(([location]) => location));
-                    entries.forEach(([location, alumniList]) => {
+                    entries.forEach(([location, cluster]) => {
                         const coords = coordinates[location] || { lat: 14.1667, lng: 121.2167 };
-                        addMarker(location, alumniList, coords.lat, coords.lng);
+                        addMarker(location, cluster, coords.lat, coords.lng);
                     });
                 }
             } catch (e) {

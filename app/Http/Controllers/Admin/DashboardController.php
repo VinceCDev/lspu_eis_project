@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\DashboardStats;
 use App\Models\GeocodeCache;
-use App\Models\Report;
 use App\Services\AlignmentService;
 use App\Services\Auth;
 use Illuminate\Http\JsonResponse;
@@ -86,9 +85,20 @@ class DashboardController extends Controller
         $cacheKey = 'dashboard_employment_status_by_campus:'.($isSuperadmin ? 'all' : Auth::campusId());
 
         $data = Cache::remember($cacheKey, 300, function () use ($isSuperadmin) {
+            // C4: authorised campus list first, then ONE grouped pass for all
+            // of them instead of a 4-query loop per campus.
             $campuses = $isSuperadmin
                 ? (new Campus())->all()
-                : array_filter((new Campus())->all(), fn ($c) => (int) $c['campus_id'] === Auth::campusId());
+                : array_values(array_filter((new Campus())->all(), fn ($c) => (int) $c['campus_id'] === Auth::campusId()));
+
+            $campusIds = array_map(static fn ($c) => (int) $c['campus_id'], $campuses);
+            if (empty($campusIds)) {
+                return [];
+            }
+
+            $stats = new DashboardStats();
+            $byCampusPrograms = $stats->employmentStatusPerProgramByCampus($campusIds);
+            $byCampusColleges = $stats->collegesByCampus($campusIds);
 
             $out = [];
             foreach ($campuses as $campus) {
@@ -96,8 +106,8 @@ class DashboardController extends Controller
                 $out[] = [
                     'campus_id' => $campusId,
                     'campus_name' => $campus['name'],
-                    'employment_status_per_program' => (new DashboardStats($campusId))->employmentStatusPerProgram(),
-                    'colleges' => (new Report($campusId))->distinctColleges(),
+                    'employment_status_per_program' => $byCampusPrograms[$campusId] ?? [],
+                    'colleges' => $byCampusColleges[$campusId] ?? [],
                 ];
             }
 
@@ -105,6 +115,30 @@ class DashboardController extends Controller
         });
 
         return response()->json(['success' => true, 'campuses' => $data]);
+    }
+
+    /**
+     * C1: paginated alumni for a single map location, fetched on demand when
+     * a marker popup is opened. Replaces shipping every located alumnus in
+     * the `stats` payload.
+     */
+    public function alumniAtLocation(Request $request): JsonResponse
+    {
+        $campusId = Auth::role() === 'superadmin' ? null : Auth::campusId();
+        $city = trim((string) $request->query('city', ''));
+        $province = trim((string) $request->query('province', ''));
+
+        if ($city === '' || $province === '') {
+            return response()->json(['success' => false, 'message' => 'city and province are required.']);
+        }
+
+        $perPage = 20;
+        $page = max(1, (int) $request->query('page', 1));
+
+        $result = (new DashboardStats($campusId))
+            ->alumniAtLocation($city, $province, $perPage, ($page - 1) * $perPage);
+
+        return response()->json(['success' => true] + $result);
     }
 
     public function collegeEmploymentStatus(Request $request): JsonResponse

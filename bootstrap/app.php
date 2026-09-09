@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnforceSessionTimeout;
 use App\Http\Middleware\EnsureRole;
+use App\Http\Middleware\PerfProfiler;
 use App\Http\Middleware\RejectCrossOriginPost;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
@@ -26,6 +27,8 @@ return Application::configure(basePath: dirname(__DIR__))
             RejectCrossOriginPost::class,
             EnforceSessionTimeout::class,
             SecurityHeaders::class,
+            // TEMPORARY: no-op unless PERF_DEBUG=1 or ?perf=1 — see the class.
+            PerfProfiler::class,
         ]);
 
         $middleware->alias([
