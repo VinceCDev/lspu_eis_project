@@ -20,6 +20,34 @@ class UserController extends Controller
 {
     use ConvertsUploadedFile;
 
+    /**
+     * Validate + store an uploaded picture, catching ANY failure (bad file,
+     * unwritable folder, a throw from the framework's UploadedFile) so it
+     * becomes a clean JSON message instead of a 500.
+     *
+     * @return array{ok: bool, path: ?string, error: ?string}
+     */
+    private function storeUploadedPicture(Request $request, string $field, string $category): array
+    {
+        if (!$request->hasFile($field)) {
+            return ['ok' => true, 'path' => null, 'error' => null];
+        }
+
+        try {
+            $filename = Uploader::store($this->fileToArray($request->file($field)), $category);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['ok' => false, 'path' => null, 'error' => 'The picture could not be processed. Please try a JPG or PNG.'];
+        }
+
+        if (!$filename) {
+            return ['ok' => false, 'path' => null, 'error' => Uploader::$lastError ?: 'Unsupported image file.'];
+        }
+
+        return ['ok' => true, 'path' => "uploads/{$category}/{$filename}", 'error' => null];
+    }
+
     public function index()
     {
         return view('admin.user', [
@@ -77,15 +105,11 @@ class UserController extends Controller
             return response()->json(['success' => false, 'message' => 'Email already registered.']);
         }
 
-        $profilePic = null;
-        if ($request->hasFile('profile_pic')) {
-            $category = $role === 'employer' ? 'logos' : 'profile_picture';
-            $filename = Uploader::store($this->fileToArray($request->file('profile_pic')), $category);
-            if (!$filename) {
-                return response()->json(['success' => false, 'message' => 'Photo not uploaded: '.(Uploader::$lastError ?: 'unsupported file.')]);
-            }
-            $profilePic = "uploads/{$category}/{$filename}";
+        $pic = $this->storeUploadedPicture($request, 'profile_pic', $role === 'employer' ? 'logos' : 'profile_picture');
+        if (!$pic['ok']) {
+            return response()->json(['success' => false, 'message' => 'Photo not uploaded: '.$pic['error']]);
         }
+        $profilePic = $pic['path'];
 
         $randomPassword = bin2hex(random_bytes(5));
         $userId = $userModel->create($email, null, password_hash($randomPassword, PASSWORD_DEFAULT), $role, $status);
@@ -161,14 +185,11 @@ class UserController extends Controller
                 return response()->json(['success' => false, 'message' => 'Forbidden: resource belongs to a different campus.'], 403);
             }
 
-            $profilePic = null;
-            if ($request->hasFile('profile_pic')) {
-                $filename = Uploader::store($this->fileToArray($request->file('profile_pic')), 'profile_picture');
-                if (!$filename) {
-                    return response()->json(['success' => false, 'message' => 'Photo not updated: '.(Uploader::$lastError ?: 'unsupported file.')]);
-                }
-                $profilePic = 'uploads/profile_picture/'.$filename;
+            $pic = $this->storeUploadedPicture($request, 'profile_pic', 'profile_picture');
+            if (!$pic['ok']) {
+                return response()->json(['success' => false, 'message' => 'Photo not updated: '.$pic['error']]);
             }
+            $profilePic = $pic['path'];
             $campusId = Auth::role() === 'superadmin' && $request->has('campus_id')
                 ? (int) $request->input('campus_id')
                 : null;
@@ -188,14 +209,11 @@ class UserController extends Controller
         }
 
         if ($role === 'employer') {
-            $companyLogo = null;
-            if ($request->hasFile('profile_pic')) {
-                $filename = Uploader::store($this->fileToArray($request->file('profile_pic')), 'logos');
-                if (!$filename) {
-                    return response()->json(['success' => false, 'message' => 'Logo not updated: '.(Uploader::$lastError ?: 'unsupported file.')]);
-                }
-                $companyLogo = 'uploads/logos/'.$filename;
+            $pic = $this->storeUploadedPicture($request, 'profile_pic', 'logos');
+            if (!$pic['ok']) {
+                return response()->json(['success' => false, 'message' => 'Logo not updated: '.$pic['error']]);
             }
+            $companyLogo = $pic['path'];
             $accountModel->updateEmployer(
                 $userId,
                 trim($request->input('company_name', '')),
@@ -212,14 +230,11 @@ class UserController extends Controller
             return response()->json(['success' => false, 'message' => 'Forbidden: resource belongs to a different campus.'], 403);
         }
 
-        $profilePic = null;
-        if ($request->hasFile('profile_pic')) {
-            $filename = Uploader::store($this->fileToArray($request->file('profile_pic')), 'profile_picture');
-            if (!$filename) {
-                return response()->json(['success' => false, 'message' => 'Photo not updated: '.(Uploader::$lastError ?: 'unsupported file.')]);
-            }
-            $profilePic = 'uploads/profile_picture/'.$filename;
+        $pic = $this->storeUploadedPicture($request, 'profile_pic', 'profile_picture');
+        if (!$pic['ok']) {
+            return response()->json(['success' => false, 'message' => 'Photo not updated: '.$pic['error']]);
         }
+        $profilePic = $pic['path'];
         $accountModel->updateAlumni(
             $userId,
             trim($request->input('email', '')),
