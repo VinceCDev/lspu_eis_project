@@ -1,0 +1,81 @@
+# LSPU EIS — production Docker stack for a single VPS.
+#
+#   app       PHP-FPM (runs migrations + caching on boot via entrypoint)
+#   web       Nginx, published on port 80
+#   db        MySQL 8
+#   queue     php artisan queue:work  (database queue)
+#   scheduler php artisan schedule:run every 60s (backups, purge-stale, etc.)
+#
+# Usage:  docker compose up -d --build
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lspu-eis:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./:/var/www/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: "${DB_DATABASE}"
+      MYSQL_USER: "${DB_USERNAME}"
+      MYSQL_PASSWORD: "${DB_PASSWORD}"
+      MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD}"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${DB_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  queue:
+    image: lspu-eis:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_BOOTSTRAP: skip
+    entrypoint: ["/bin/sh", "-c"]
+    command: "until [ -f vendor/autoload.php ]; do echo 'waiting for vendor...'; sleep 3; done; exec php artisan queue:work --sleep=3 --tries=3 --max-time=3600"
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      - app
+      - db
+
+  scheduler:
+    image: lspu-eis:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_BOOTSTRAP: skip
+    entrypoint: ["/bin/sh", "-c"]
+    command: "until [ -f vendor/autoload.php ]; do sleep 3; done; while true; do php artisan schedule:run --no-interaction; sleep 60; done"
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      - app
+      - db
+
+volumes:
+  db-data:
