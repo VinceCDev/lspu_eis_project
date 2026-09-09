@@ -12,6 +12,7 @@ use App\Services\EmploymentReportImporter;
 use App\Services\MailService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 /** Ported from backend/Controllers/Admin/AlumniController.php. */
 class AlumniController extends Controller
@@ -278,8 +279,13 @@ class AlumniController extends Controller
 
         $tmp = $file->getRealPath() ?: storage_path('app/'.$file->store('tmp'));
 
+        // Optional progress token: the frontend polls importProgress with it
+        // for a live % while this (synchronous) import runs.
+        $token = preg_replace('/[^A-Za-z0-9_]/', '', (string) $request->input('import_token', ''));
+        $token = $token !== '' ? substr($token, 0, 64) : null;
+
         try {
-            $summary = (new EmploymentReportImporter())->import($tmp, $campusId, $year);
+            $summary = (new EmploymentReportImporter())->import($tmp, $campusId, $year, $token);
 
             (new AuditLog())->log(
                 (int) Auth::user()['user_id'],
@@ -292,6 +298,9 @@ class AlumniController extends Controller
             );
         } catch (\Throwable $e) {
             report($e);
+            if ($token !== null) {
+                Cache::forget(EmploymentReportImporter::progressKey($token));
+            }
 
             return response()->json([
                 'success' => false,
@@ -299,11 +308,29 @@ class AlumniController extends Controller
             ]);
         }
 
+        if ($token !== null) {
+            Cache::forget(EmploymentReportImporter::progressKey($token));
+        }
+
         return response()->json([
             'success' => true,
             'message' => "Imported {$summary['imported']} of {$summary['graduate_rows']} graduate rows.",
             'summary' => $summary,
         ]);
+    }
+
+    /** Live progress for an in-flight employment-report import (polled by the frontend). */
+    public function importProgress(Request $request): JsonResponse
+    {
+        $token = preg_replace('/[^A-Za-z0-9_]/', '', (string) $request->query('token', ''));
+        if ($token === '') {
+            return response()->json(['phase' => 'unknown', 'done' => 0, 'total' => 0]);
+        }
+
+        return response()->json(
+            Cache::get(EmploymentReportImporter::progressKey(substr($token, 0, 64)))
+                ?: ['phase' => 'reading', 'done' => 0, 'total' => 0]
+        );
     }
 
     private function create(array $data): JsonResponse

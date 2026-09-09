@@ -495,8 +495,8 @@
                 <div class="text-sm text-gray-600 dark:text-gray-300">{{ importFile ? importFile.name : 'Click to choose a file' }}</div>
             </label>
 
-            <!-- Progress: real % while the file uploads, then an indeterminate bar
-                 while the server parses the sheet and inserts rows. -->
+            <!-- Progress: real % for the upload, then a real row-processing %
+                 polled from the server while it parses + inserts rows. -->
             <div v-else class="border-2 border-dashed border-indigo-200 dark:border-indigo-800 rounded-lg p-6">
                 <div class="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                     <span>
@@ -505,10 +505,11 @@
                         <span v-else>Processing spreadsheet…</span>
                     </span>
                     <span v-if="importPhase === 'uploading'">{{ importUploadPct }}%</span>
-                    <span v-else>{{ importElapsed }}s</span>
+                    <span v-else>{{ importProcessPct }}%</span>
                 </div>
                 <div class="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                     <div v-if="importPhase === 'uploading'" class="h-full bg-indigo-600" style="transition:width .2s ease;" :style="{ width: importUploadPct + '%' }"></div>
+                    <div v-else-if="importProcessPct > 0" class="h-full bg-indigo-600" style="transition:width .3s ease;" :style="{ width: importProcessPct + '%' }"></div>
                     <div v-else class="h-full bg-indigo-600 import-bar-indeterminate"></div>
                 </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">

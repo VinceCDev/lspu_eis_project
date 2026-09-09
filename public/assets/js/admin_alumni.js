@@ -50,7 +50,7 @@ createApp({
             importResult: null,
             importPhase: null,      // 'uploading' while the file transfers, 'processing' while the server parses/inserts
             importUploadPct: 0,     // real 0-100 during upload (XHR upload.onprogress)
-            importElapsed: 0,       // seconds since the server started processing (no real % available from one request)
+            importProcessPct: 0,    // real 0-99 during processing, polled from ?action=importProgress
             showViewModal: false,
             viewAlumniData: {
                 skills: [],
@@ -392,7 +392,7 @@ createApp({
         _resetImportProgress() {
             this.importPhase = null;
             this.importUploadPct = 0;
-            this.importElapsed = 0;
+            this.importProcessPct = 0;
         },
         _clearImportTimer() {
             if (this._importTimer) { clearInterval(this._importTimer); this._importTimer = null; }
@@ -403,8 +403,10 @@ createApp({
             this._resetImportProgress();
             this.importPhase = 'uploading';
 
+            const token = 'imp_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
             const fd = new FormData();
             fd.append('file', this.importFile);
+            fd.append('import_token', token);
             if (this.importCampusId) fd.append('campus_id', this.importCampusId);
             if (this.importYear) fd.append('year', this.importYear);
 
@@ -412,20 +414,28 @@ createApp({
             xhr.open('POST', '/admin_alumni?action=importEmploymentReport');
             xhr.setRequestHeader('Accept', 'application/json');
 
-            // Real progress for the file transfer only.
+            // Real % for the file transfer.
             xhr.upload.onprogress = (e) => {
                 if (e.lengthComputable) {
                     this.importUploadPct = Math.round((e.loaded / e.total) * 100);
                 }
             };
-            // Upload finished — the server is now parsing the sheet and inserting
-            // rows. A single request can't report a real %, so switch to an
-            // indeterminate bar with an elapsed-seconds counter.
+            // Upload done — poll the server for the real row-processing % while
+            // it parses the sheet and inserts records.
             xhr.upload.onload = () => {
                 this.importUploadPct = 100;
                 this.importPhase = 'processing';
                 this._clearImportTimer();
-                this._importTimer = setInterval(() => { this.importElapsed += 1; }, 1000);
+                this._importTimer = setInterval(async () => {
+                    try {
+                        const r = await fetch('/admin_alumni?action=importProgress&token=' + token, { cache: 'no-store' });
+                        const p = await r.json();
+                        if (p && p.total > 0) {
+                            // cap at 99 until the POST response actually returns
+                            this.importProcessPct = Math.min(99, Math.round((p.done / p.total) * 100));
+                        }
+                    } catch (e) { /* keep polling */ }
+                }, 700);
             };
 
             const finish = () => { this._clearImportTimer(); this.importing = false; this.importPhase = null; };
