@@ -48,6 +48,9 @@ createApp({
             importYear: null,
             importing: false,
             importResult: null,
+            importPhase: null,      // 'uploading' while the file transfers, 'processing' while the server parses/inserts
+            importUploadPct: 0,     // real 0-100 during upload (XHR upload.onprogress)
+            importElapsed: 0,       // seconds since the server started processing (no real % available from one request)
             showViewModal: false,
             viewAlumniData: {
                 skills: [],
@@ -367,6 +370,7 @@ createApp({
             this.importFile = null;
             this.importResult = null;
             this.importing = false;
+            this._resetImportProgress();
             this.importCampusId = this.isSuperadmin ? '' : (this.currentCampusId || '');
             this.importYear = null;
             if (!this.campuses.length) this.fetchCampuses();
@@ -374,36 +378,72 @@ createApp({
         },
         closeImportModal() {
             this.showImportModal = false;
+            this._clearImportTimer();
             if (this.importResult && this.importResult.imported > 0) {
                 this.fetchAlumni();
             }
             this.importResult = null;
             this.importFile = null;
+            this._resetImportProgress();
         },
         onImportFileChange(e) {
             this.importFile = e.target.files[0] || null;
         },
-        async runImport() {
-            if (!this.importFile) return;
+        _resetImportProgress() {
+            this.importPhase = null;
+            this.importUploadPct = 0;
+            this.importElapsed = 0;
+        },
+        _clearImportTimer() {
+            if (this._importTimer) { clearInterval(this._importTimer); this._importTimer = null; }
+        },
+        runImport() {
+            if (!this.importFile || this.importing) return;
             this.importing = true;
-            try {
-                const fd = new FormData();
-                fd.append('file', this.importFile);
-                if (this.importCampusId) fd.append('campus_id', this.importCampusId);
-                if (this.importYear) fd.append('year', this.importYear);
-                const res = await fetch('/admin_alumni?action=importEmploymentReport', { method: 'POST', body: fd });
-                const data = await res.json();
-                if (data.success) {
+            this._resetImportProgress();
+            this.importPhase = 'uploading';
+
+            const fd = new FormData();
+            fd.append('file', this.importFile);
+            if (this.importCampusId) fd.append('campus_id', this.importCampusId);
+            if (this.importYear) fd.append('year', this.importYear);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/admin_alumni?action=importEmploymentReport');
+            xhr.setRequestHeader('Accept', 'application/json');
+
+            // Real progress for the file transfer only.
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    this.importUploadPct = Math.round((e.loaded / e.total) * 100);
+                }
+            };
+            // Upload finished — the server is now parsing the sheet and inserting
+            // rows. A single request can't report a real %, so switch to an
+            // indeterminate bar with an elapsed-seconds counter.
+            xhr.upload.onload = () => {
+                this.importUploadPct = 100;
+                this.importPhase = 'processing';
+                this._clearImportTimer();
+                this._importTimer = setInterval(() => { this.importElapsed += 1; }, 1000);
+            };
+
+            const finish = () => { this._clearImportTimer(); this.importing = false; this.importPhase = null; };
+            xhr.onload = () => {
+                finish();
+                let data = null;
+                try { data = JSON.parse(xhr.responseText); } catch (e) { /* handled below */ }
+                if (data && data.success) {
                     this.importResult = data.summary;
                     this.showNotification(data.message, 'success');
                 } else {
-                    this.showNotification(data.message || 'Import failed.', 'error');
+                    this.showNotification((data && data.message) || 'Import failed.', 'error');
                 }
-            } catch (err) {
-                this.showNotification('Import failed.', 'error');
-            } finally {
-                this.importing = false;
-            }
+            };
+            xhr.onerror = () => { finish(); this.showNotification('Import failed — the connection was lost.', 'error'); };
+            xhr.ontimeout = () => { finish(); this.showNotification('Import timed out. Try a smaller file or split it by year.', 'error'); };
+
+            xhr.send(fd);
         },
         // Modals (Add/Edit/View/Delete)
         openAddModal() {

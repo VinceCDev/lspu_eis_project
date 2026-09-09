@@ -459,6 +459,10 @@
 </div>
 
 <!-- Import from Employment Report -->
+<style>
+@keyframes importBarIndeterminate { 0% { transform: translateX(-110%); } 100% { transform: translateX(430%); } }
+.import-bar-indeterminate { width: 22%; animation: importBarIndeterminate 1.15s ease-in-out infinite; }
+</style>
 <div v-if="showImportModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black bg-opacity-50" role="dialog" aria-modal="true" style="padding:1rem;">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-lg mx-2 p-6 relative" style="max-height:88vh;overflow-y:auto;">
         <button class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" @click="showImportModal = false" aria-label="Close"><i class="fas fa-times"></i></button>
@@ -485,15 +489,38 @@
                     <input type="number" v-model.number="importYear" min="1960" :max="new Date().getFullYear() + 1" placeholder="e.g. 2023" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-gray-200">
                 </div>
             </div>
-            <label class="block w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-indigo-400 transition">
+            <label v-if="!importing" class="block w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-indigo-400 transition">
                 <input type="file" accept=".xlsx,.xls,.csv" class="hidden" @change="onImportFileChange">
                 <i class="fas fa-file-excel text-3xl text-indigo-500 mb-2"></i>
                 <div class="text-sm text-gray-600 dark:text-gray-300">{{ importFile ? importFile.name : 'Click to choose a file' }}</div>
             </label>
+
+            <!-- Progress: real % while the file uploads, then an indeterminate bar
+                 while the server parses the sheet and inserts rows. -->
+            <div v-else class="border-2 border-dashed border-indigo-200 dark:border-indigo-800 rounded-lg p-6">
+                <div class="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                    <span>
+                        <i class="fas fa-file-excel text-indigo-500 mr-1"></i>
+                        <span v-if="importPhase === 'uploading'">Uploading file…</span>
+                        <span v-else>Processing spreadsheet…</span>
+                    </span>
+                    <span v-if="importPhase === 'uploading'">{{ importUploadPct }}%</span>
+                    <span v-else>{{ importElapsed }}s</span>
+                </div>
+                <div class="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                    <div v-if="importPhase === 'uploading'" class="h-full bg-indigo-600" style="transition:width .2s ease;" :style="{ width: importUploadPct + '%' }"></div>
+                    <div v-else class="h-full bg-indigo-600 import-bar-indeterminate"></div>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    {{ importFile ? importFile.name : '' }} — please keep this window open. Large files can take up to a minute.
+                </p>
+            </div>
+
             <div class="flex justify-end gap-2 mt-5">
-                <button class="px-4 py-2 rounded bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700" @click="showImportModal = false">Cancel</button>
+                <button class="px-4 py-2 rounded bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700 disabled:opacity-50" :disabled="importing" @click="showImportModal = false">Cancel</button>
                 <button class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition disabled:opacity-50" :disabled="!importFile || importing || (isSuperadmin && !importCampusId) || !importYear" @click="runImport">
-                    {{ importing ? 'Importing…' : 'Import' }}
+                    <span v-if="importing"><i class="fas fa-spinner fa-spin mr-1"></i>{{ importPhase === 'uploading' ? 'Uploading…' : 'Processing…' }}</span>
+                    <span v-else>Import</span>
                 </button>
             </div>
         </div>
