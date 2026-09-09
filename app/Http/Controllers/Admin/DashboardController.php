@@ -134,6 +134,15 @@ class DashboardController extends Controller
      * Server-side geocoding for the alumni location map, backed by a
      * permanent DB cache.
      */
+    /**
+     * Nominatim requires ~1 request/second and times out slowly, so a page
+     * that just gained hundreds of never-seen locations (e.g. after a bulk
+     * alumni import) would otherwise spend minutes here and 500. Cap the
+     * live lookups per request; the rest stay uncached and fill in over
+     * later loads. Obviously-not-a-place strings are skipped outright.
+     */
+    private const MAX_GEOCODE_LOOKUPS = 8;
+
     public function geocode(Request $request): JsonResponse
     {
         $locations = array_values(array_unique(array_filter(array_map('trim', $request->input('locations', [])))));
@@ -142,25 +151,49 @@ class DashboardController extends Controller
             return response()->json(['success' => true, 'coordinates' => []]);
         }
 
-        $cache = new GeocodeCache();
-        $coordinates = $cache->getMany($locations);
+        try {
+            $cache = new GeocodeCache();
+            $coordinates = $cache->getMany($locations);
 
-        $missing = array_values(array_diff($locations, array_keys($coordinates)));
+            $missing = array_values(array_filter(
+                array_diff($locations, array_keys($coordinates)),
+                fn (string $loc) => $this->looksLikePlace($loc)
+            ));
 
-        if (Session::isStarted()) {
-            Session::save();
-        }
-
-        foreach ($missing as $location) {
-            $coords = $this->geocodeViaNominatim($location);
-            if ($coords !== null) {
-                $cache->set($location, $coords['lat'], $coords['lng']);
-                $coordinates[$location] = $coords;
+            if (Session::isStarted()) {
+                Session::save();
             }
-            usleep(1100000);
+
+            $done = 0;
+            foreach ($missing as $location) {
+                if ($done >= self::MAX_GEOCODE_LOOKUPS) {
+                    break;
+                }
+                $coords = $this->geocodeViaNominatim($location);
+                $done++;
+                if ($coords !== null) {
+                    $cache->set($location, $coords['lat'], $coords['lng']);
+                    $coordinates[$location] = $coords;
+                }
+                usleep(1100000);
+            }
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json(['success' => true, 'coordinates' => $coordinates ?? []]);
         }
 
         return response()->json(['success' => true, 'coordinates' => $coordinates]);
+    }
+
+    /** Cheap filter: a real "City, Province" has no house numbers, street or barangay tokens. */
+    private function looksLikePlace(string $s): bool
+    {
+        if ($s === '' || mb_strlen($s) > 80 || preg_match('/\d/', $s)) {
+            return false;
+        }
+
+        return !preg_match('/\b(brgy|barangay|purok|sitio|blk|block|lot|phase|st\.?|street|ave|avenue|subd|subdivision|#)\b/i', $s);
     }
 
     /** @return array{lat: float, lng: float}|null */

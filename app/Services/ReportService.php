@@ -7,11 +7,26 @@ use App\Models\Report;
 
 class ReportService
 {
+    /**
+     * industryDetermination()/industryAnalysis() call Gemini once per row
+     * with no cache. After a large alumni import that is thousands of
+     * synchronous API calls per report load — enough to hang the page and
+     * starve php-fpm. Cap the live calls; past the cap (or once Gemini has
+     * clearly failed) fall back to the local keyword classifier.
+     */
+    private const MAX_GEMINI_CALLS = 20;
+
     private Report $report;
     private GeminiClient $gemini;
     private AlignmentService $alignment;
     private ?int $campusId;
     private ?string $college;
+
+    private int $geminiCalls = 0;
+
+    private int $geminiFailures = 0;
+
+    private bool $geminiDown = false;
 
     public function __construct(?Report $report = null, ?GeminiClient $gemini = null, ?int $campusId = null, ?string $college = null, ?int $yearGraduated = null, ?AlignmentService $alignment = null)
     {
@@ -20,6 +35,26 @@ class ReportService
         $this->alignment = $alignment ?? new AlignmentService($this->gemini);
         $this->campusId = $campusId;
         $this->college = ($college !== null && $college !== '') ? $college : null;
+    }
+
+    /**
+     * Budget-limited Gemini call. Returns '' when the per-request cap is
+     * reached or Gemini looks unreachable, so callers can use a local
+     * classifier instead of blocking on hundreds of API round-trips.
+     */
+    private function askGemini(string $prompt): string
+    {
+        if ($this->geminiDown || $this->geminiCalls >= self::MAX_GEMINI_CALLS) {
+            return '';
+        }
+        $this->geminiCalls++;
+
+        $out = trim($this->gemini->generate($prompt));
+        if ($out === '' && ++$this->geminiFailures >= 2) {
+            $this->geminiDown = true;
+        }
+
+        return $out;
     }
 
     public function summary(): array
@@ -258,7 +293,10 @@ class ReportService
 
             if (!empty($row['job_title']) || !empty($row['company'])) {
                 $prompt = "Given the job title: '{$row['job_title']}' and company: '{$row['company']}', determine the industry sector. Choose from: Technology/IT, Healthcare, Finance/Banking, Education, Manufacturing, Retail, Government, Non-profit, Hospitality/Tourism, Transportation, Construction, Media/Entertainment, Energy, Agriculture, Other. Only return the industry name.";
-                $industry = trim($this->gemini->generate($prompt));
+                $industry = $this->askGemini($prompt);
+                if ($industry === '') {
+                    $industry = $this->classifyIndustryLocally($row['job_title'] ?? '', $row['company'] ?? '', null);
+                }
                 if ($industry !== '') {
                     $stats[$college][$course]['industries'][] = $industry;
                 }
@@ -364,10 +402,14 @@ class ReportService
 
             $industryList = implode("\n", self::STANDARD_INDUSTRIES);
             $prompt = "Given the job title: '{$row['job_title']}', company: '{$row['company']}', and job description: '{$row['job_description']}', categorize this into one of these industries. Only return the exact industry name from the list:\n\n{$industryList}\n\nOnly return the exact industry name from the list above.";
-            $industry = trim($this->gemini->generate($prompt));
+            $industry = $this->askGemini($prompt);
 
             if (!in_array($industry, self::STANDARD_INDUSTRIES, true)) {
-                $industry = 'Other Community, Social and Personal Service Activities';
+                $industry = $this->classifyIndustryLocally(
+                    $row['job_title'] ?? '',
+                    $row['company'] ?? '',
+                    $row['job_description'] ?? ''
+                );
             }
 
             if (!isset($analysis[$course][$industry])) {
