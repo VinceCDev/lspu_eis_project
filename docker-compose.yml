@@ -20,7 +20,7 @@ x-laravel-env: &laravel-env
   APP_ENV: "${APP_ENV:-production}"
   APP_KEY: "${APP_KEY:-}"
   APP_DEBUG: "${APP_DEBUG:-false}"
-  APP_URL: "${APP_URL:-http://72.62.240.65}"
+  APP_URL: "${APP_URL:-http://72.62.240.65:8080}"
   LOG_CHANNEL: stack
   LOG_LEVEL: "${LOG_LEVEL:-warning}"
   DB_CONNECTION: mysql
@@ -58,7 +58,7 @@ services:
     image: lspu-eis-web:latest
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "${WEB_PORT:-8080}:80"
     volumes:
       - uploads-data:/var/www/html/public/uploads:ro
     depends_on:
