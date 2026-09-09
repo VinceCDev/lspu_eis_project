@@ -1,112 +1,117 @@
-# Deploy sa Hostinger VPS (Docker) — LSPU EIS
+# Deploy to Hostinger VPS (Docker) — LSPU EIS
 
-Sunod-sunod na hakbang. Gawin lahat sa **hPanel** at sa **SSH terminal** ng VPS.
+Step-by-step. Do everything in **hPanel** and in the VPS **SSH / Browser terminal**.
 
----
-
-## 1. Mag-SSH sa VPS
-
-1. hPanel → **VPS** → piliin ang server mo → **Overview**
-   - Tandaan ang **IP address** (hal. `193.203.xxx.xxx`)
-2. Kaliwang menu → **SSH Access**
-   - Kung hindi mo alam ang root password: pindutin **Change SSH password** → maglagay ng bago.
-3. Sa laptop mo, buksan ang **PowerShell** at i-type:
-   ```powershell
-   ssh root@193.203.xxx.xxx
-   ```
-   - Sagutin ng `yes` ang tanong tungkol sa fingerprint (unang beses lang).
-   - Ilagay ang password (hindi lalabas ang mga letra habang nagta-type — normal yan).
-
-Kapag nakapasok ka na, may prompt kang ganito: `root@srv123:~#`
+VPS in use: `srv1847558.hstgr.cloud` — IP `72.62.240.65` — Ubuntu, KVM 4.
 
 ---
 
-## 2. I-check ang OS at Docker
+## 1. Open a terminal on the VPS
+
+**Option A — Browser terminal (easiest, no setup):**
+
+1. hPanel → **VPS** → row `srv1847558...` → **Manage**
+2. Left menu → **Browser terminal**
+3. Log in as `root` (use the root password the VPS owner set; if you don't have it,
+   ask the owner, or use **Change root password** in the VPS panel).
+
+**Option B — SSH from your PC:**
+
+```powershell
+ssh root@72.62.240.65
+```
+Answer `yes` to the fingerprint prompt (first time only), then enter the password
+(characters won't show while typing — that's normal).
+
+You're in when the prompt looks like `root@srv1847558:~#`
+
+---
+
+## 2. Check the OS and whether Docker is installed
 
 ```bash
-cat /etc/os-release | head -2
-docker --version || echo "WALA PANG DOCKER"
-docker compose version || echo "WALA PANG COMPOSE"
+cat /etc/os-release | grep PRETTY_NAME
+docker --version || echo "NO DOCKER YET"
+docker compose version || echo "NO COMPOSE YET"
 ```
 
-- Kung **may Docker na** → dumiretso sa Step 4.
-- Kung **WALA** → Step 3.
+- **Docker already there** → skip to Step 4.
+- **Not there** → Step 3.
 
 ---
 
-## 3. Mag-install ng Docker (kung wala pa)
+## 3. Install Docker (only if missing)
 
-Para sa Ubuntu/Debian VPS:
+For Ubuntu/Debian:
 
 ```bash
 curl -fsSL https://get.docker.com | sh
 systemctl enable --now docker
-docker run --rm hello-world     # dapat may "Hello from Docker!" na lalabas
+docker run --rm hello-world     # should print "Hello from Docker!"
 ```
-
-> Kung hindi Ubuntu/Debian ang VPS (hal. AlmaLinux/CentOS), sabihin mo sa akin ang output ng `cat /etc/os-release`.
 
 ---
 
-## 4. Kunin ang project (git clone)
+## 4. Get the project (git clone)
 
 ```bash
 cd /opt
-git clone <URL_NG_REPO_MO> lspu-eis
+git clone https://github.com/VinceCDev/lspu_eis_project.git lspu-eis
 cd /opt/lspu-eis
 ```
 
-> Kung private ang repo, gagamit ka ng GitHub **Personal Access Token** bilang password,
-> o mag-setup ng deploy key. Sabihin mo lang kung private.
+> If the repo is **private**, git will ask for a username and password. Use your
+> GitHub username and a **Personal Access Token** (GitHub → Settings → Developer
+> settings → Personal access tokens) as the password. Or make the repo public.
 
 ---
 
-## 5. Gawin ang `.env`
+## 5. Create the `.env`
 
 ```bash
 cp .env.docker.example .env
 nano .env
 ```
 
-Palitan ang mga linyang may `CHANGE_ME` at `YOUR_VPS_IP`:
+Change the lines marked `CHANGE_ME` and `YOUR_VPS_IP`:
 
-| Linya | Ilagay |
+| Line | Set to |
 |---|---|
-| `APP_URL` | `http://` + IP ng VPS mo (hal. `http://193.203.10.20`) |
-| `DB_PASSWORD` | isang matibay na password (walang space) |
-| `DB_ROOT_PASSWORD` | **ibang** matibay na password |
+| `APP_URL` | `http://72.62.240.65` |
+| `DB_PASSWORD` | a strong password (no spaces) |
+| `DB_ROOT_PASSWORD` | a **different** strong password |
 
-Wala nang kailangang baguhin sa `DB_HOST` (`db` na ang tama).
+Leave `DB_HOST=db` as is — that's correct for the Docker network.
 
-I-save ang nano: `Ctrl+O` → `Enter` → `Ctrl+X`.
+Save in nano: `Ctrl+O` → `Enter` → `Ctrl+X`.
 
 ---
 
-## 6. I-build at patakbuhin
+## 6. Build and start
 
 ```bash
 docker compose up -d --build
 ```
 
-Unang build: ~3–8 minuto. Pagkatapos:
+First build takes ~3–8 minutes. Then:
 
 ```bash
-docker compose ps           # dapat "running" / "healthy" lahat
-docker compose logs -f app  # panoorin ang bootstrap (migrate, cache). Ctrl+C para lumabas.
+docker compose ps           # all services should be "running" / "healthy"
+docker compose logs -f app  # watch the bootstrap (migrate, cache). Ctrl+C to exit.
 ```
 
-Sa `app` logs, hanapin ang:
+In the `app` logs, look for:
 - `Generating APP_KEY...`
-- `Migrating: ...` na tapos nang walang error
+- `Migrating: ...` finishing with no errors
 - `Caching config / routes / views...`
 
 ---
 
-## 7. Subukan
+## 7. Test it
 
-Buksan sa browser: **`http://IP-NG-VPS-MO`**
+Open in a browser: **`http://72.62.240.65`**
 
-Kung may "500 Server Error":
+If you get a "500 Server Error":
 ```bash
 docker compose exec app php artisan config:clear
 docker compose exec app tail -n 50 storage/logs/laravel.log
@@ -114,17 +119,17 @@ docker compose exec app tail -n 50 storage/logs/laravel.log
 
 ---
 
-## 8. Gumawa ng unang admin / seed (kung kailangan)
+## 8. Seed data / first admin (if needed)
 
 ```bash
 docker compose exec app php artisan db:seed --force
-# o kung may custom command:
+# or, for a custom command:
 docker compose exec app php artisan tinker
 ```
 
 ---
 
-## 9. Firewall (ilantad ang port 80)
+## 9. Firewall (expose port 80)
 
 ```bash
 ufw allow OpenSSH
@@ -136,7 +141,7 @@ ufw status
 
 ---
 
-## Pag may update sa code (redeploy)
+## Redeploying after a code change
 
 ```bash
 cd /opt/lspu-eis
@@ -146,27 +151,28 @@ docker compose exec app php artisan migrate --force
 docker compose restart app queue scheduler
 ```
 
-(Ang `app` entrypoint ang bahala sa `config:cache` / `route:cache` / `view:cache`.)
+(The `app` entrypoint handles `config:cache` / `route:cache` / `view:cache`.)
 
 ---
 
-## Mamaya: magdagdag ng domain + HTTPS
+## Later: add a domain + HTTPS
 
-1. Sa domain registrar mo, gumawa ng **A record**: `@` → IP ng VPS. Hintayin mag-propagate (~30 min).
-2. Baguhin sa `.env`: `APP_URL=https://yourdomain.com` → `docker compose restart app`.
-3. Idagdag ang Caddy o Nginx-Proxy-Manager para sa auto-SSL, o gamitin ang certbot.
-   Sabihin mo lang kapag nandito ka na — bibigyan kita ng exact compose add-on.
+1. At your domain registrar, add an **A record**: `@` → `72.62.240.65`. Wait for
+   propagation (~30 min).
+2. In `.env`, set `APP_URL=https://yourdomain.com` → `docker compose restart app`.
+3. Add Caddy or Nginx Proxy Manager for automatic SSL, or use certbot.
+   Ask when you reach this point and I'll give you the exact compose add-on.
 
 ---
 
-## Mabilisang cheat-sheet
+## Quick cheat-sheet
 
-| Gawin | Command |
+| Do this | Command |
 |---|---|
-| Tingnan status | `docker compose ps` |
+| Show status | `docker compose ps` |
 | Logs | `docker compose logs -f app` |
-| Artisan | `docker compose exec app php artisan <cmd>` |
+| Run artisan | `docker compose exec app php artisan <cmd>` |
 | MySQL shell | `docker compose exec db mysql -u root -p` |
-| Restart lahat | `docker compose restart` |
-| Patay lahat | `docker compose down` |
-| Patay + burahin DB | `docker compose down -v`  ⚠️ mawawala ang data |
+| Restart all | `docker compose restart` |
+| Stop all | `docker compose down` |
+| Stop + wipe DB | `docker compose down -v`  ⚠️ deletes all data |
