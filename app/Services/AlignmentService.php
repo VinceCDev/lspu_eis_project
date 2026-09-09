@@ -77,6 +77,10 @@ class AlignmentService
      */
     public function classify(array $courseJobPairs): array
     {
+        // One batched cache lookup instead of a DB round-trip per pair
+        // (thousands of rows after a bulk import).
+        $this->preload($courseJobPairs);
+
         $alignment = [];
 
         foreach ($courseJobPairs as $row) {

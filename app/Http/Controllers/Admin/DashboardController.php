@@ -36,7 +36,7 @@ class DashboardController extends Controller
 
         $payload = Cache::remember(
             'dashboard_stats:'.($campusId ?? 'all'),
-            30,
+            120,
             function () use ($campusId) {
                 $stats = new DashboardStats($campusId);
 
@@ -56,8 +56,9 @@ class DashboardController extends Controller
     public function courseWorkAlignment(): JsonResponse
     {
         $campusId = Auth::role() === 'superadmin' ? null : Auth::campusId();
-        $stats = new DashboardStats($campusId);
 
+        // Release the session lock before the (possibly slow) first build so
+        // other requests from the same admin aren't blocked behind it.
         if (Session::isStarted()) {
             Session::save();
         }
@@ -65,7 +66,11 @@ class DashboardController extends Controller
         set_time_limit(180);
 
         try {
-            $alignment = (new AlignmentService())->classify($stats->currentCourseJobTitles());
+            $alignment = Cache::remember(
+                'dashboard_course_work_alignment:'.($campusId ?? 'all'),
+                600,
+                fn () => (new AlignmentService())->classify((new DashboardStats($campusId))->currentCourseJobTitles())
+            );
 
             return response()->json(['success' => true, 'course_work_alignment' => $alignment]);
         } catch (\Throwable $e) {
@@ -80,7 +85,7 @@ class DashboardController extends Controller
         $isSuperadmin = Auth::role() === 'superadmin';
         $cacheKey = 'dashboard_employment_status_by_campus:'.($isSuperadmin ? 'all' : Auth::campusId());
 
-        $data = Cache::remember($cacheKey, 60, function () use ($isSuperadmin) {
+        $data = Cache::remember($cacheKey, 300, function () use ($isSuperadmin) {
             $campuses = $isSuperadmin
                 ? (new Campus())->all()
                 : array_filter((new Campus())->all(), fn ($c) => (int) $c['campus_id'] === Auth::campusId());
