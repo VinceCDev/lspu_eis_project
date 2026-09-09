@@ -185,7 +185,8 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Profile Picture</label>
-                            <input type="file" @change="handleAdminPhotoUpload" accept="image/*" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                            <input type="file" @change="handleAdminPhotoUpload" accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">JPG, PNG, GIF or WEBP · max 5 MB. iPhone photos may need to be converted from HEIC first.</p>
                             <p v-if="currentProfilePicName" class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">Current: {{ currentProfilePicName }}</p>
                         </div>
                     </div>
