@@ -28,16 +28,43 @@ fi
 
 # --- One-time bootstrap: primary "app" container only ------------------
 if [ "${APP_BOOTSTRAP:-run}" = "run" ]; then
-    echo "[entrypoint] Waiting for database / running migrations..."
+
+    MYSQL="mysql -h ${DB_HOST:-db} -P ${DB_PORT:-3306} -u ${DB_USERNAME:-lspu_eis} -p${DB_PASSWORD:-lspu_eis_db_pass} ${DB_DATABASE:-lspu_eis}"
+
+    echo "[entrypoint] Waiting for database to accept connections..."
     tries=0
-    until php artisan migrate --force 2>/dev/null; do
+    until $MYSQL -e "SELECT 1" >/dev/null 2>&1; do
         tries=$((tries + 1))
-        if [ "$tries" -ge 40 ]; then
-            echo "[entrypoint] DB not ready after 40 tries — continuing anyway."
+        if [ "$tries" -ge 60 ]; then
+            echo "[entrypoint] Database not reachable after 60 tries — continuing."
             break
         fi
-        sleep 3
+        sleep 2
     done
+
+    # This app's real schema is an unversioned dump (database/schema.sql),
+    # not `php artisan migrate`. On a fresh database, import it, then record
+    # the incremental migration files as already applied (schema.sql is a
+    # current dump that already contains their changes).
+    TABLE_COUNT=$($MYSQL -N -B -e \
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '${DB_DATABASE:-lspu_eis}'" \
+        2>/dev/null || echo 0)
+
+    if [ "${TABLE_COUNT:-0}" -lt 5 ]; then
+        echo "[entrypoint] Fresh database (${TABLE_COUNT} tables) — importing database/schema.sql"
+        $MYSQL < database/schema.sql
+        $MYSQL -e "CREATE TABLE IF NOT EXISTS migrations (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, migration VARCHAR(255) NOT NULL, batch INT NOT NULL)"
+        for f in database/migrations/*.php; do
+            name=$(basename "$f" .php)
+            $MYSQL -e "INSERT INTO migrations (migration, batch) SELECT '$name', 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM migrations WHERE migration = '$name')"
+        done
+        echo "[entrypoint] Schema imported; migration files marked as applied."
+    else
+        echo "[entrypoint] Database already has ${TABLE_COUNT} tables — skipping schema import."
+    fi
+
+    echo "[entrypoint] Running migrations (any new ones only)..."
+    php artisan migrate --force || echo "[entrypoint] migrate reported an issue — continuing."
 
     echo "[entrypoint] Caching config / routes / views..."
     php artisan package:discover --ansi 2>/dev/null || true

@@ -13,6 +13,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         git \
         unzip \
+        default-mysql-client \
         libzip-dev \
         libpng-dev \
         libjpeg62-turbo-dev \

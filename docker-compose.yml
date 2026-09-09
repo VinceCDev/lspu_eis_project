@@ -1,19 +1,16 @@
 # LSPU EIS — production Docker stack for a single VPS.
 #
-#   app       PHP-FPM (runs migrations + caching on boot via entrypoint)
-#   web       Nginx, published on port 80
-#   db        MySQL 8
-#   queue     php artisan queue:work  (database queue)
-#   scheduler php artisan schedule:run every 60s (backups, purge-stale, etc.)
+#   app   PHP-FPM (imports database/schema.sql + caches config on boot)
+#   web   Nginx, published on ${WEB_PORT:-8080}
+#   db    MySQL 8
 #
-# Fully self-contained: code is baked into the images, so no repo checkout
-# needs to persist on the host. Config can be overridden via environment
-# variables (Hostinger Docker Manager env panel, or a .env file next to
-# this compose file); sensible defaults let it boot without any.
+# This app does NOT use queues (its `jobs` table is job postings, not a
+# Laravel queue table) and defines no scheduled tasks, so there is no
+# queue worker or scheduler service. QUEUE_CONNECTION is forced to sync.
 #
-# The MySQL port is NOT published — the database is only reachable on the
-# internal compose network, so the default DB password is acceptable for a
-# first boot. Change DB_PASSWORD / DB_ROOT_PASSWORD when you can.
+# Config can be overridden via environment variables (Hostinger Docker
+# Manager env panel, or a .env file next to this compose file); sensible
+# defaults let it boot without any. The MySQL port is NOT published.
 
 x-laravel-env: &laravel-env
   APP_NAME: "LSPU EIS"
@@ -31,7 +28,7 @@ x-laravel-env: &laravel-env
   DB_PASSWORD: "${DB_PASSWORD:-lspu_eis_db_pass}"
   SESSION_DRIVER: database
   CACHE_STORE: database
-  QUEUE_CONNECTION: database
+  QUEUE_CONNECTION: sync
   FILESYSTEM_DISK: local
   MAIL_MAILER: "${MAIL_MAILER:-log}"
 
@@ -66,6 +63,9 @@ services:
 
   db:
     image: mysql:8.0
+    # native password auth so the (MariaDB) mysql client in the app image
+    # can connect without the caching_sha2_password plugin
+    command: --default-authentication-plugin=mysql_native_password
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: "${DB_DATABASE:-lspu_eis}"
@@ -79,28 +79,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
-
-  queue:
-    image: lspu-eis-app:latest
-    restart: unless-stopped
-    environment:
-      <<: *laravel-env
-      APP_BOOTSTRAP: skip
-    command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--max-time=3600"]
-    depends_on:
-      - app
-      - db
-
-  scheduler:
-    image: lspu-eis-app:latest
-    restart: unless-stopped
-    environment:
-      <<: *laravel-env
-      APP_BOOTSTRAP: skip
-    command: ["/bin/sh", "-c", "while true; do php artisan schedule:run --no-interaction; sleep 60; done"]
-    depends_on:
-      - app
-      - db
 
 volumes:
   db-data:
