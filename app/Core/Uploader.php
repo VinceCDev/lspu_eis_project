@@ -83,7 +83,7 @@ class Uploader
         $ext = $expectedExts[0];
 
         $targetDir = self::basePath(trim($category, '/')).'/';
-        if (!is_dir($targetDir) && !mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
+        if (!is_dir($targetDir) && !@mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
             self::$lastError = 'Server could not create the upload folder.';
 
             return null;
@@ -92,7 +92,7 @@ class Uploader
         $filename = uniqid($category.'_', true).'.'.$ext;
         $targetPath = $targetDir.$filename;
 
-        if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+        if (!@move_uploaded_file($file['tmp_name'], $targetPath)) {
             self::$lastError = 'Server could not save the uploaded file (check upload folder permissions).';
 
             return null;
@@ -119,7 +119,7 @@ class Uploader
         $ext = $expectedExts[0];
 
         $targetDir = self::basePath(trim($category, '/')).'/';
-        if (!is_dir($targetDir) && !mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
+        if (!is_dir($targetDir) && !@mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
             self::$lastError = 'Server could not create the upload folder.';
 
             return null;
@@ -129,7 +129,7 @@ class Uploader
         $filename = uniqid('', true).'_'.$safeName.'.'.$ext;
         $targetPath = $targetDir.$filename;
 
-        if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+        if (!@move_uploaded_file($file['tmp_name'], $targetPath)) {
             self::$lastError = 'Server could not save the uploaded file.';
 
             return null;
