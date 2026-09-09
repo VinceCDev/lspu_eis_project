@@ -7,6 +7,19 @@
  */
 $title = $title ?? 'LSPU EIS';
 $active = $active ?? '';
+
+/**
+ * Cache-bust app-owned JS/CSS with the file's mtime so a deploy is picked
+ * up immediately — nginx serves /assets with "Cache-Control: immutable",
+ * so without this a changed admin_*.js keeps serving stale from the browser
+ * until a hard refresh.
+ */
+$assetV = static function (string $rel): string {
+    $abs = public_path($rel);
+    $v = is_file($abs) ? (string) filemtime($abs) : '1';
+
+    return asset($rel).'?v='.$v;
+};
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -25,7 +38,7 @@ $active = $active ?? '';
     <link rel="stylesheet" href="<?php echo asset('assets/vendor/fontawesome/css/all.min.css'); ?>">
     <link rel="stylesheet" href="<?php echo asset('assets/vendor/tailwind/tailwind.css'); ?>">
     <?php if (!empty($pageCss)) { ?>
-    <link rel="stylesheet" href="<?php echo asset('assets/css/'.$pageCss); ?>">
+    <link rel="stylesheet" href="<?php echo $assetV('assets/css/'.$pageCss); ?>">
     <?php } ?>
     <?php echo $extraHead ?? ''; ?>
     <style>[v-cloak] { display: none !important; }</style>
@@ -46,10 +59,10 @@ $active = $active ?? '';
     <?php /* defer: don't block HTML parsing; still execute in order
              (vue -> lib-loader -> page script) before DOMContentLoaded. */ ?>
     <script defer src="<?php echo asset('assets/vendor/vue/vue.global.prod.js'); ?>"></script>
-    <script defer src="<?php echo asset('assets/js/lib-loader.js'); ?>"></script>
+    <script defer src="<?php echo $assetV('assets/js/lib-loader.js'); ?>"></script>
     <?php echo $extraScripts ?? ''; ?>
     <?php if (!empty($pageJs)) { ?>
-    <script defer src="<?php echo asset('assets/js/'.$pageJs); ?>"></script>
+    <script defer src="<?php echo $assetV('assets/js/'.$pageJs); ?>"></script>
     <?php } ?>
 </body>
 </html>
