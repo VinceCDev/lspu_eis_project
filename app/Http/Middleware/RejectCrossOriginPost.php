@@ -55,19 +55,29 @@ class RejectCrossOriginPost
         // an app that lives in a subdirectory like APP_URL here. Comparing
         // it against the full APP_URL (path included) would reject every
         // real same-origin POST a browser ever sends.
+        // The origin the request was actually served on (scheme://host:port,
+        // non-default port included). Accepting this alongside APP_URL lets
+        // the app be reached by IP, by hostname, or behind a proxy that
+        // forwards the real Host — a genuine cross-site POST still carries a
+        // third-party Origin/Referer that matches neither.
+        $self = rtrim($request->getSchemeAndHttpHost(), '/');
+
         $origin = $request->header('Origin');
         if ($origin !== null) {
             $expectedParts = parse_url($expected);
             $expectedOrigin = ($expectedParts['scheme'] ?? '').'://'.($expectedParts['host'] ?? '')
                 .(isset($expectedParts['port']) ? ':'.$expectedParts['port'] : '');
 
-            return rtrim($origin, '/') !== $expectedOrigin;
+            $origin = rtrim($origin, '/');
+
+            return $origin !== $expectedOrigin && $origin !== $self;
         }
 
         // Referer includes the full path, so this stays a prefix check.
         $referer = $request->header('Referer');
         if ($referer !== null) {
-            return !str_starts_with($referer, $expected.'/') && rtrim($referer, '/') !== $expected;
+            return !str_starts_with($referer, $expected.'/') && rtrim($referer, '/') !== $expected
+                && !str_starts_with($referer, $self.'/') && rtrim($referer, '/') !== $self;
         }
 
         // Neither header present — default-deny (see class docblock).
