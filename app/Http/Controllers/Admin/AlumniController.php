@@ -12,7 +12,6 @@ use App\Services\EmploymentReportImporter;
 use App\Services\MailService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Session;
 
 /** Ported from backend/Controllers/Admin/AlumniController.php. */
@@ -251,7 +250,7 @@ class AlumniController extends Controller
      * Bulk-import graduates from an LSPU "Data on Employment" (tracer) Excel
      * file. Non-superadmin admins can only import into their own campus.
      */
-    public function importEmploymentReport(Request $request): JsonResponse
+    public function importEmploymentReport(Request $request)
     {
         $file = $request->file('file');
         if (!$file || !$file->isValid()) {
@@ -280,72 +279,68 @@ class AlumniController extends Controller
 
         $tmp = $file->getRealPath() ?: storage_path('app/'.$file->store('tmp'));
 
-        // Optional progress token: the frontend polls importProgress with it
-        // for a live % while this (synchronous) import runs.
-        $token = preg_replace('/[^A-Za-z0-9_]/', '', (string) $request->input('import_token', ''));
-        $token = $token !== '' ? substr($token, 0, 64) : null;
+        $actorId = (int) Auth::user()['user_id'];
+        $actorEmail = Auth::user()['email'] ?? null;
+        $actorRole = Auth::role();
 
-        // Release the file-session lock now — the import runs for many seconds
-        // and the frontend's importProgress polls (same session) would block
-        // behind it, so the bar would never move until the import finished.
+        // Release the file-session lock — the import runs for many seconds and
+        // we don't want it holding other requests from this admin.
         if (Session::isStarted()) {
             Session::save();
         }
         @set_time_limit(600);
 
-        try {
-            $summary = (new EmploymentReportImporter())->import($tmp, $campusId, $year, $token);
-
-            (new AuditLog())->log(
-                (int) Auth::user()['user_id'],
-                Auth::user()['email'] ?? null,
-                Auth::role(),
-                'import_employment_report',
-                'alumni',
-                null,
-                "Imported {$summary['imported']} alumni from an employment report ({$summary['skipped']} skipped)."
-            );
-        } catch (\Throwable $e) {
-            report($e);
-            if ($token !== null) {
-                Cache::forget(EmploymentReportImporter::progressKey($token));
+        // Stream newline-delimited JSON: one {phase,done,total} line per
+        // progress tick, then a final {success,message,summary} line. The
+        // frontend reads xhr.responseText incrementally, so the % moves in
+        // real time on a single connection (no polling, works even on a
+        // single-process dev server).
+        return response()->stream(function () use ($tmp, $campusId, $year, $actorId, $actorEmail, $actorRole) {
+            while (ob_get_level() > 0) {
+                @ob_end_flush();
             }
+            @ob_implicit_flush(true);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Import failed: '.$e->getMessage(),
-            ]);
-        }
+            $emit = static function (array $data): void {
+                echo json_encode($data)."\n";
+                flush();
+            };
 
-        if ($token !== null) {
-            Cache::forget(EmploymentReportImporter::progressKey($token));
-        }
+            try {
+                $summary = (new EmploymentReportImporter())->import(
+                    $tmp,
+                    $campusId,
+                    $year,
+                    static function (array $p) use ($emit): void {
+                        $emit(['phase' => $p['phase'], 'done' => $p['done'], 'total' => $p['total']]);
+                    }
+                );
 
-        return response()->json([
-            'success' => true,
-            'message' => "Imported {$summary['imported']} of {$summary['graduate_rows']} graduate rows.",
-            'summary' => $summary,
+                (new AuditLog())->log(
+                    $actorId,
+                    $actorEmail,
+                    $actorRole,
+                    'import_employment_report',
+                    'alumni',
+                    null,
+                    "Imported {$summary['imported']} alumni from an employment report ({$summary['skipped']} skipped)."
+                );
+
+                $emit([
+                    'phase' => 'done',
+                    'success' => true,
+                    'message' => "Imported {$summary['imported']} of {$summary['graduate_rows']} graduate rows.",
+                    'summary' => $summary,
+                ]);
+            } catch (\Throwable $e) {
+                report($e);
+                $emit(['phase' => 'error', 'success' => false, 'message' => 'Import failed: '.$e->getMessage()]);
+            }
+        }, 200, [
+            'Content-Type' => 'application/x-ndjson',
+            'Cache-Control' => 'no-cache, no-store',
+            'X-Accel-Buffering' => 'no',
         ]);
-    }
-
-    /** Live progress for an in-flight employment-report import (polled by the frontend). */
-    public function importProgress(Request $request): JsonResponse
-    {
-        // Drop the session lock immediately so rapid polls never queue behind
-        // each other (or behind the import request).
-        if (Session::isStarted()) {
-            Session::save();
-        }
-
-        $token = preg_replace('/[^A-Za-z0-9_]/', '', (string) $request->query('token', ''));
-        if ($token === '') {
-            return response()->json(['phase' => 'unknown', 'done' => 0, 'total' => 0]);
-        }
-
-        return response()->json(
-            Cache::get(EmploymentReportImporter::progressKey(substr($token, 0, 64)))
-                ?: ['phase' => 'reading', 'done' => 0, 'total' => 0]
-        );
     }
 
     private function create(array $data): JsonResponse
