@@ -3,56 +3,57 @@ const { test, expect } = require('@playwright/test');
 const path = require('path');
 const { loginAs } = require('../fixtures/helpers');
 
-test.setTimeout(60000);
+test.setTimeout(90000);
 
 /**
- * The alumni-module "Import from Employment Report" now shows a progress bar:
- * a real % while the file uploads, then an indeterminate bar + elapsed-seconds
- * counter while the server parses the sheet. The import request is stubbed so
- * this test never touches the database.
+ * "Import from Employment Report" streams newline-delimited JSON
+ * ({phase,done,total} ticks, then a final {success,message,summary}) so the
+ * % moves in real time on one connection. Real 25-row import, rows tagged
+ * @impstream.test.
+ *
+ * (The progressive flush itself is covered by a curl check in the PR notes;
+ * here we assert the browser wires it up: a non-zero % is shown and the run
+ * completes with the streamed summary.)
  */
-test('alumni import shows upload % then a processing bar', async ({ page }) => {
-  // Stub the import endpoint: respond ~2.5s later with a normal success payload.
-  await page.route(/importEmploymentReport/, async (route) => {
-    await new Promise((r) => setTimeout(r, 2500));
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        success: true,
-        message: 'Import complete.',
-        summary: { imported: 3, skipped: 1, experience_rows: 3, placeholder_emails: 0, emailed: 0, warnings: [], skipped_details: [], errors: [] },
-      }),
-    });
-  });
+test('streamed import shows a moving % and finishes with the summary', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+
+  // capture the % label whenever Vue updates it
+  const pcts = [];
+  await page.exposeFunction('__pct', (v) => pcts.push(v));
 
   await loginAs(page, 'superadmin');
-  await page.waitForLoadState('networkidle');
   await page.goto('/superadmin_alumni');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(1500);
 
   await page.locator('button:has-text("Import")').first().click();
   const modal = page.locator('div[role="dialog"]:has-text("Import from Employment Report")');
   await expect(modal).toBeVisible();
-
-  // Fill the required fields (superadmin must pick a campus + year).
   await modal.locator('select').selectOption({ index: 1 });
   await modal.locator('input[type="number"]').fill('2023');
-  await modal.locator('input[type="file"]').setInputFiles(path.resolve(__dirname, '../fixtures/dummy-import.csv'));
+  await modal.locator('input[type="file"]').setInputFiles(path.resolve(__dirname, '../fixtures/import-stream-25.csv'));
+
+  // sample the visible % text every 150ms in the page itself
+  await page.evaluate(() => {
+    window.__pi = setInterval(() => {
+      const el = [...document.querySelectorAll('[role="dialog"] span')].find((s) => /^\d+%$/.test(s.textContent.trim()));
+      if (el) window.__pct(parseInt(el.textContent));
+    }, 150);
+  });
 
   await modal.getByRole('button', { name: 'Import', exact: true }).click();
+  await expect(modal.locator('text=imported').first()).toBeVisible({ timeout: 40000 });
+  await page.evaluate(() => clearInterval(window.__pi));
 
-  // The progress region must appear (upload phase or already processing).
-  const progress = page.locator('text=/Uploading file…|Processing spreadsheet…/');
-  await expect(progress).toBeVisible({ timeout: 3000 });
-  const barCount = await page.locator('.import-bar-indeterminate, [style*="width:"]').count();
-  console.log('progress text seen:', await progress.innerText());
-  console.log('bar elements:', barCount);
-  await page.screenshot({ path: 'tests/Browser/screenshots/alumni-import-progress-bar.png' });
+  const distinct = [...new Set(pcts)].sort((a, b) => a - b);
+  const summary = (await modal.innerText()).replace(/\s+/g, ' ');
+  console.log('% values observed:', distinct.join(', '));
+  console.log('result:', summary.slice(0, 140));
 
-  // It resolves to the result summary once the stub responds.
-  await expect(page.locator('text=imported').first()).toBeVisible({ timeout: 8000 });
-  await expect(page.locator('text=/Uploading file…|Processing spreadsheet…/')).toHaveCount(0);
-
-  await page.screenshot({ path: 'tests/Browser/screenshots/alumni-import-progress.png' });
+  expect(errors).toEqual([]);
+  expect(summary).toMatch(/25\s+imported/);
+  expect(distinct.some((v) => v > 0 && v < 100)).toBe(true); // a real intermediate %
 });

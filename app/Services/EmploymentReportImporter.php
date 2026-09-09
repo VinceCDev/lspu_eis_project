@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\SiteSetting;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -61,8 +60,8 @@ class EmploymentReportImporter
 
     private bool $sendCredentialEmails;
 
-    /** Cache key suffix the frontend polls for a live % while the import runs (null = don't publish progress). */
-    private ?string $progressToken = null;
+    /** Called with ['phase','done','total','imported'] as rows are processed — the controller streams these to the browser. */
+    private $onProgress = null;
     private int $progressTotal = 0;
     private int $progressDone = 0;
     private float $progressLastFlush = 0.0;
@@ -98,35 +97,32 @@ class EmploymentReportImporter
         }
     }
 
-    public function import(string $path, ?int $campusId, ?int $year, ?string $progressToken = null): array
+    /**
+     * @param  callable|null  $onProgress  fn(array{phase:string,done:int,total:int,imported:int}): void
+     */
+    public function import(string $path, ?int $campusId, ?int $year, ?callable $onProgress = null): array
     {
-        $this->progressToken = $progressToken ?: null;
+        $this->onProgress = $onProgress;
 
         return $this->run($path, $campusId, $year, false);
     }
 
-    /** Cache key the controller/frontend agree on for a given import token. */
-    public static function progressKey(string $token): string
-    {
-        return 'import:progress:'.$token;
-    }
-
     private function publishProgress(string $phase, bool $force = false): void
     {
-        if ($this->progressToken === null) {
+        if ($this->onProgress === null) {
             return;
         }
         $now = microtime(true);
-        if (!$force && ($now - $this->progressLastFlush) < 0.25) {
+        if (!$force && ($now - $this->progressLastFlush) < 0.2) {
             return;
         }
         $this->progressLastFlush = $now;
-        Cache::put(self::progressKey($this->progressToken), [
+        ($this->onProgress)([
             'phase' => $phase,
             'done' => $this->progressDone,
             'total' => $this->progressTotal,
             'imported' => $this->result['imported'],
-        ], 300);
+        ]);
     }
 
     /** Parse + map every row but write nothing (testing / pre-import preview). */

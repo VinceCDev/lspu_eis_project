@@ -50,7 +50,7 @@ createApp({
             importResult: null,
             importPhase: null,      // 'uploading' while the file transfers, 'processing' while the server parses/inserts
             importUploadPct: 0,     // real 0-100 during upload (XHR upload.onprogress)
-            importProcessPct: 0,    // real 0-99 during processing, polled from ?action=importProgress
+            importProcessPct: 0,    // real 0-100 during processing, read from the streamed NDJSON response
             showViewModal: false,
             viewAlumniData: {
                 skills: [],
@@ -403,16 +403,14 @@ createApp({
             this._resetImportProgress();
             this.importPhase = 'uploading';
 
-            const token = 'imp_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
             const fd = new FormData();
             fd.append('file', this.importFile);
-            fd.append('import_token', token);
             if (this.importCampusId) fd.append('campus_id', this.importCampusId);
             if (this.importYear) fd.append('year', this.importYear);
 
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/admin_alumni?action=importEmploymentReport');
-            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.setRequestHeader('Accept', 'application/x-ndjson');
 
             // Real % for the file transfer.
             xhr.upload.onprogress = (e) => {
@@ -420,34 +418,45 @@ createApp({
                     this.importUploadPct = Math.round((e.loaded / e.total) * 100);
                 }
             };
-            // Upload done — poll the server for the real row-processing % while
-            // it parses the sheet and inserts records.
             xhr.upload.onload = () => {
                 this.importUploadPct = 100;
                 this.importPhase = 'processing';
-                this._clearImportTimer();
-                this._importTimer = setInterval(async () => {
-                    try {
-                        const r = await fetch('/admin_alumni?action=importProgress&token=' + token, { cache: 'no-store' });
-                        const p = await r.json();
-                        if (p && p.total > 0) {
-                            // cap at 99 until the POST response actually returns
-                            this.importProcessPct = Math.min(99, Math.round((p.done / p.total) * 100));
-                        }
-                    } catch (e) { /* keep polling */ }
-                }, 700);
             };
+
+            // The response is newline-delimited JSON streamed as the server
+            // works: {phase,done,total} ticks, then a final {success,...}. Parse
+            // whatever complete lines have arrived so far each time more data
+            // comes in — the % moves on this one connection, no polling.
+            let offset = 0;
+            let last = null;
+            const consume = () => {
+                const text = xhr.responseText;
+                let nl;
+                while ((nl = text.indexOf('\n', offset)) !== -1) {
+                    const line = text.slice(offset, nl).trim();
+                    offset = nl + 1;
+                    if (!line) continue;
+                    let msg;
+                    try { msg = JSON.parse(line); } catch (e) { continue; }
+                    last = msg;
+                    if (msg.total > 0 && typeof msg.done === 'number') {
+                        this.importProcessPct = Math.min(99, Math.round((msg.done / msg.total) * 100));
+                    }
+                    if (msg.phase === 'done') this.importProcessPct = 100;
+                }
+            };
+            xhr.onprogress = consume;
 
             const finish = () => { this._clearImportTimer(); this.importing = false; this.importPhase = null; };
             xhr.onload = () => {
+                consume();
                 finish();
-                let data = null;
-                try { data = JSON.parse(xhr.responseText); } catch (e) { /* handled below */ }
-                if (data && data.success) {
-                    this.importResult = data.summary;
-                    this.showNotification(data.message, 'success');
+                const msg = last || {};
+                if (msg.success) {
+                    this.importResult = msg.summary;
+                    this.showNotification(msg.message, 'success');
                 } else {
-                    this.showNotification((data && data.message) || 'Import failed.', 'error');
+                    this.showNotification(msg.message || 'Import failed.', 'error');
                 }
             };
             xhr.onerror = () => { finish(); this.showNotification('Import failed — the connection was lost.', 'error'); };
