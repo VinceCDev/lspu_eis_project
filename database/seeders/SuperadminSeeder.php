@@ -25,7 +25,7 @@ class SuperadminSeeder extends Seeder
 {
     public function run(): void
     {
-        $email = env('SUPERADMIN_EMAIL', 'superadmin@lspu.edu.ph');
+        $email = env('SUPERADMIN_EMAIL', 'lspueis@gmail.com');
         $password = env('SUPERADMIN_PASSWORD', 'ChangeMe!Super2026');
 
         if (DB::table('user')->where('email', $email)->exists()) {
