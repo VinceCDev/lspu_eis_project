@@ -1,0 +1,58 @@
+{
+ "name": "F1_6m_location",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 1,
+ "overall": {
+  "n": 5,
+  "rps": 4.05,
+  "avg": 275,
+  "p50": 267,
+  "p95": 440,
+  "p99": 440,
+  "max": 440,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 5,
+  "kb": 7
+ },
+ "byLabel": {
+  "loc:alumniAtLocation": {
+   "n": 5,
+   "rps": 4.05,
+   "avg": 275,
+   "p50": 267,
+   "p95": 440,
+   "p99": 440,
+   "max": 440,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 5,
+   "kb": 7,
+   "perf": {
+    "db_ms_avg": 243,
+    "q_avg": 3,
+    "dupe_avg": 0,
+    "mem_mb_max": 6
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 5,
+   "p50": 267,
+   "p95": 440
+  }
+ ],
+ "errBodies": [],
+ "upload_window_ms": null
+}

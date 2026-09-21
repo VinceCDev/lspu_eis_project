@@ -100,7 +100,7 @@ class AlignmentService
                 ];
             }
 
-            ++$alignment[$course]['counts'][$this->classifyOne($course, $title)];
+            $alignment[$course]['counts'][$this->classifyOne($course, $title)] += (int) ($row['cnt'] ?? 1);
         }
 
         foreach ($alignment as &$data) {

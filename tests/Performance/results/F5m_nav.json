@@ -1,0 +1,127 @@
+{
+ "name": "F5m_nav",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 2,
+ "overall": {
+  "n": 4,
+  "rps": 2.43,
+  "avg": 88,
+  "p50": 86,
+  "p95": 95,
+  "p99": 95,
+  "max": 95,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 4,
+  "kb": 27
+ },
+ "byLabel": {
+  "nav:profile": {
+   "n": 1,
+   "rps": 0.61,
+   "avg": 87,
+   "p50": 87,
+   "p95": 87,
+   "p99": 87,
+   "max": 87,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 0,
+   "perf": {
+    "db_ms_avg": 4,
+    "q_avg": 1,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  },
+  "nav:settings": {
+   "n": 1,
+   "rps": 0.61,
+   "avg": 86,
+   "p50": 86,
+   "p95": 86,
+   "p99": 86,
+   "max": 86,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 31,
+   "perf": {
+    "db_ms_avg": 4,
+    "q_avg": 4,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  },
+  "nav:notification": {
+   "n": 1,
+   "rps": 0.61,
+   "avg": 95,
+   "p50": 95,
+   "p95": 95,
+   "p99": 95,
+   "max": 95,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 28,
+   "perf": {
+    "db_ms_avg": 0,
+    "q_avg": 0,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  },
+  "nav:user": {
+   "n": 1,
+   "rps": 0.61,
+   "avg": 83,
+   "p50": 83,
+   "p95": 83,
+   "p99": 83,
+   "max": 83,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 49,
+   "perf": {
+    "db_ms_avg": 0,
+    "q_avg": 0,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 4,
+   "p50": 86,
+   "p95": 95
+  }
+ ],
+ "errBodies": [],
+ "upload_window_ms": null
+}

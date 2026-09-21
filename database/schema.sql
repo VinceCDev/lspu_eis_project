@@ -75,6 +75,11 @@ CREATE TABLE `alumni` (
   KEY `fk_alumni_campus` (`campus_id`),
   KEY `alumni_college_index` (`college`),
   KEY `alumni_created_at_index` (`created_at`),
+  KEY `alumni_course_college_index` (`course`,`college`),
+  KEY `alumni_campus_course_college_index` (`campus_id`,`course`,`college`),
+  KEY `alumni_city_province_course_index` (`city`,`province`,`course`),
+  KEY `alumni_year_graduated_index` (`year_graduated`),
+  KEY `alumni_campus_id_year_graduated_index` (`campus_id`,`year_graduated`),
   CONSTRAINT `alumni_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `user` (`user_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_alumni_campus` FOREIGN KEY (`campus_id`) REFERENCES `campus` (`campus_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=999991 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

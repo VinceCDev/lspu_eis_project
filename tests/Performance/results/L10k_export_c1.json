@@ -1,0 +1,57 @@
+{
+ "name": "L10k_export_c1",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 2,
+ "overall": {
+  "n": 1,
+  "rps": 0.64,
+  "avg": 1349,
+  "p50": 1349,
+  "p95": 1349,
+  "p99": 1349,
+  "max": 1349,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 1,
+  "kb": 3619
+ },
+ "byLabel": {
+  "rep:fullData(export)": {
+   "n": 1,
+   "rps": 0.64,
+   "avg": 1349,
+   "p50": 1349,
+   "p95": 1349,
+   "p99": 1349,
+   "max": 1349,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 3619,
+   "perf": {
+    "db_ms_avg": 372,
+    "q_avg": 12,
+    "dupe_avg": 0,
+    "mem_mb_max": 46
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 1,
+   "p50": 1349,
+   "p95": 1349
+  }
+ ],
+ "errBodies": []
+}

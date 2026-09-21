@@ -37,11 +37,15 @@ class AlignmentCache
         }
 
         $keys = array_values(array_unique(array_map(static fn (array $p) => self::key($p[0], $p[1]), $pairs)));
-        $placeholders = implode(',', array_fill(0, count($keys), '?'));
 
+        // Chunked: one IN() with a placeholder per distinct (course, title) pair breaks past PDO's 65,535-placeholder
+        // limit once imports have introduced enough distinct free-text job titles.
         $out = [];
-        foreach ($this->selectAll("SELECT cache_key, label FROM alignment_cache WHERE cache_key IN ({$placeholders})", $keys) as $row) {
-            $out[$row['cache_key']] = $row['label'];
+        foreach (array_chunk($keys, 5000) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            foreach ($this->selectAll("SELECT cache_key, label FROM alignment_cache WHERE cache_key IN ({$placeholders})", $chunk) as $row) {
+                $out[$row['cache_key']] = $row['label'];
+            }
         }
 
         return $out;

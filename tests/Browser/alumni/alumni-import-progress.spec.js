@@ -6,16 +6,15 @@ const { loginAs } = require('../fixtures/helpers');
 test.setTimeout(90000);
 
 /**
- * "Import from Employment Report" streams newline-delimited JSON
- * ({phase,done,total} ticks, then a final {success,message,summary}) so the
- * % moves in real time on one connection. Real 25-row import, rows tagged
+ * "Import from Employment Report" is a QUEUED import: the upload only stores the file and returns an import id; the page then polls
+ * ?action=importStatus and shows Queued -> Importing (n / total, %) -> Completed (summary). Real 25-row import, rows tagged
  * @impstream.test.
  *
- * (The progressive flush itself is covered by a curl check in the PR notes;
- * here we assert the browser wires it up: a non-zero % is shown and the run
- * completes with the streamed summary.)
+ * Needs the 2026_09_22 migration applied (`php artisan migrate`). With QUEUE_CONNECTION=sync (the dev default) the job runs inside the
+ * upload request, so the run is already complete when the first status arrives and no intermediate % is observable; with a real
+ * queue worker running (`php artisan queue:work database_long --queue=imports`) the % moves and the last assertion also applies.
  */
-test('streamed import shows a moving % and finishes with the summary', async ({ page }) => {
+test('queued import shows its progress and finishes with the summary', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -44,8 +43,8 @@ test('streamed import shows a moving % and finishes with the summary', async ({ 
     }, 150);
   });
 
-  await modal.getByRole('button', { name: 'Import', exact: true }).click();
-  await expect(modal.locator('text=imported').first()).toBeVisible({ timeout: 40000 });
+  await modal.getByRole('button', { name: /Upload & import/ }).click();
+  await expect(modal.locator('text=imported').first()).toBeVisible({ timeout: 60000 });
   await page.evaluate(() => clearInterval(window.__pi));
 
   const distinct = [...new Set(pcts)].sort((a, b) => a - b);
@@ -55,5 +54,7 @@ test('streamed import shows a moving % and finishes with the summary', async ({ 
 
   expect(errors).toEqual([]);
   expect(summary).toMatch(/25\s+imported/);
-  expect(distinct.some((v) => v > 0 && v < 100)).toBe(true); // a real intermediate %
+  if (process.env.IMPORT_QUEUE_WORKER === '1') {
+    expect(distinct.some((v) => v > 0 && v < 100)).toBe(true); // a real intermediate % (only observable when a worker does the import)
+  }
 });

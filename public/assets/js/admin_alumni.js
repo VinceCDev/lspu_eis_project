@@ -46,11 +46,15 @@ createApp({
             importFile: null,
             importCampusId: '',
             importYear: null,
-            importing: false,
-            importResult: null,
-            importPhase: null,      // 'uploading' while the file transfers, 'processing' while the server parses/inserts
+            importing: false,       // true only while the file is being uploaded (the import itself runs on the server queue)
+            importResult: null,     // final summary once the queued import has completed
+            importPhase: null,      // 'uploading' while the file transfers
             importUploadPct: 0,     // real 0-100 during upload (XHR upload.onprogress)
-            importProcessPct: 0,    // real 0-100 during processing, read from the streamed NDJSON response
+            importJob: null,        // the queued/processing/finished import being watched: {id,status,percent,processed_rows,total_rows,...}
+            importHistory: [],      // the 10 most recent imports (survives closing the browser: read from the server)
+            importActive: 0,        // queued + processing imports (badge on the Import button)
+            totalAlumni: 0,         // rows matching the search/filters on the SERVER (this.alumni holds only the current page)
+            totalCapped: false,     // the server stopped counting at 10,000 ("10,000+")
             showViewModal: false,
             viewAlumniData: {
                 skills: [],
@@ -150,6 +154,7 @@ createApp({
         this.updateFilterCourseOptions();
         this.fetchAlumni();
         this.fetchProfile();
+        this.loadImportHistory().then(() => this._watchActiveImports());   // badge if an import is still running from an earlier visit
     },
     beforeUnmount() {
         window.removeEventListener('resize', this.handleResize);
@@ -161,43 +166,32 @@ createApp({
         'filters.college'(val) {
             this.filters.course = '';
             this.updateFilterCourseOptions();
+            this.currentPage = 1;
+            this.queueFetch();
         },
         'filters.campus_id'() {
             this.filters.college = '';
             this.filters.course = '';
             this.updateFilterCourseOptions();
+            this.currentPage = 1;
+            this.queueFetch();
+        },
+        'filters.course'() {
+            this.currentPage = 1;
+            this.queueFetch();
+        },
+        'filters.status'() {
+            this.currentPage = 1;
+            this.queueFetch();
+        },
+        currentPage() {
+            this.queueFetch(0);
         }
     },
     computed: {
+        // Search, filters and paging run on the server (a campus can hold 100k+ alumni): `alumni` is already the current page.
         filteredAlumni() {
-            let filtered = this.alumni;
-            if (this.isSuperadmin && this.filters.campus_id) {
-                filtered = filtered.filter(a => String(a.campus_id) === String(this.filters.campus_id));
-            }
-            if (this.filters.college) {
-                filtered = filtered.filter(a => a.college === this.filters.college);
-            }
-            if (this.filters.course) {
-                filtered = filtered.filter(a => a.course === this.filters.course);
-            }
-            if (this.filters.status) {
-                filtered = filtered.filter(a => a.status === this.filters.status);
-            }
-            if (this.searchQuery) {
-                const q = this.searchQuery.toLowerCase();
-                filtered = filtered.filter(a =>
-                    (`${a.first_name} ${a.middle_name} ${a.last_name}`.toLowerCase().includes(q) ||
-                    a.email.toLowerCase().includes(q) ||
-                    a.gender.toLowerCase().includes(q) ||
-                    a.year_graduated.toLowerCase().includes(q) ||
-                    a.course.toLowerCase().includes(q) ||
-                    a.college.toLowerCase().includes(q) ||
-                    a.province.toLowerCase().includes(q) ||
-                    a.city.toLowerCase().includes(q) ||
-                    a.status.toLowerCase().includes(q))
-                );
-            }
-            return filtered;
+            return this.alumni;
         },
         // Colleges available in the filter bar's College select, scoped to the chosen
         // Campus filter (superadmin) or the admin's own campus. Falls back to every
@@ -223,11 +217,10 @@ createApp({
                 : [];
         },
         paginatedAlumni() {
-            const start = (this.currentPage - 1) * this.itemsPerPage;
-            return this.filteredAlumni.slice(start, start + this.itemsPerPage);
+            return this.alumni;
         },
         totalPages() {
-            return Math.ceil(this.filteredAlumni.length / this.itemsPerPage) || 1;
+            return Math.ceil(this.totalAlumni / this.itemsPerPage) || 1;
         },
         // ADD THIS NEW COMPUTED PROPERTY:
         paginationGroup() {
@@ -319,7 +312,75 @@ createApp({
         },
         // Table and pagination
         filterAlumni() {
+            // typing in the search box: wait for a pause, then ask the server (page 1)
             this.currentPage = 1;
+            this.queueFetch(350);
+        },
+        // Coalesces bursts of triggers (page click + filter reset, keystrokes) into one request.
+        queueFetch(delay = 60) {
+            if (this._fetchTimer) clearTimeout(this._fetchTimer);
+            this._fetchTimer = setTimeout(() => { this._fetchTimer = null; this.fetchAlumni(); }, delay);
+        },
+        _alumniQuery(page, perPage) {
+            const q = new URLSearchParams({ action: 'paginatedList', page: String(page), per_page: String(perPage) });
+            const term = (this.searchQuery || '').trim();
+            if (term) q.set('search', term);
+            if (this.isSuperadmin && this.filters.campus_id) q.set('campus_id', this.filters.campus_id);
+            if (this.filters.college) q.set('college', this.filters.college);
+            if (this.filters.course) q.set('course', this.filters.course);
+            if (this.filters.status) q.set('status', this.filters.status);
+            return '/admin_alumni?' + q.toString();
+        },
+        _mapAlumni(alumni) {
+            const experience = alumni.experience || [];
+            let resume = null;
+            if (alumni.resume && alumni.resume.file_name) {
+                resume = { ...alumni.resume, url: 'uploads/resumes/' + alumni.resume.file_name };
+            }
+            return {
+                id: alumni.alumni_id,
+                first_name: alumni.first_name,
+                middle_name: alumni.middle_name,
+                last_name: alumni.last_name,
+                email: alumni.email,
+                secondary_email: alumni.secondary_email,
+                gender: alumni.gender,
+                year_graduated: alumni.year_graduated,
+                course: alumni.course,
+                college: alumni.college,
+                province: alumni.province,
+                city: alumni.city,
+                status: alumni.status,
+                campus_id: alumni.campus_id,
+                birthdate: alumni.birthdate,
+                contact: alumni.contact,
+                civil_status: alumni.civil_status,
+                verification_document: alumni.verification_document,
+                profile_picture: alumni.profile_picture,
+                skills: alumni.skills || [],
+                education: alumni.education || [],
+                experiences: experience,
+                resume: resume,
+                employment: experience.length > 0 ? {
+                    company_name: experience[0].company,
+                    position: experience[0].title,
+                    status: experience[0].employment_status,
+                    years: this.calculateYears(experience[0].start_date, experience[0].end_date)
+                } : null
+            };
+        },
+        // Every alumnus matching the current search/filters, up to a cap (the export buttons; the table itself is paged).
+        async fetchAllForExport(cap = 5000) {
+            const rows = [];
+            for (let page = 1; rows.length < cap; page++) {
+                const res = await fetch(this._alumniQuery(page, 100), { credentials: 'include' });
+                const data = await res.json();
+                if (!data.success) { this.showNotification(data.message || 'Could not load alumni for export', 'error'); break; }
+                rows.push(...data.alumni.map(a => this._mapAlumni(a)));
+                if (data.alumni.length < 100 || rows.length >= data.total) break;
+            }
+            if (rows.length >= cap) this.showNotification('Export limited to the first ' + cap.toLocaleString() + ' matching alumni — narrow the filters for the rest.', 'error');
+            return rows.slice(0, cap);
         },
         prevPage() {
             if (this.currentPage > 1) this.currentPage--;
@@ -365,26 +426,32 @@ createApp({
             const campus = this.campuses.find(c => String(c.campus_id) === String(campusId));
             return campus ? campus.name : null;
         },
-        // Import from Employment Report
+        // Import from Employment Report.
+        // The upload only transfers the file; the server QUEUES the import and returns at once. Progress is then read from
+        // import_jobs with a light poll (one primary-key read per call), and the import keeps running if this window closes.
         openImportModal() {
             this.importFile = null;
             this.importResult = null;
             this.importing = false;
+            this.importJob = null;
             this._resetImportProgress();
             this.importCampusId = this.isSuperadmin ? '' : (this.currentCampusId || '');
             this.importYear = null;
             if (!this.campuses.length) this.fetchCampuses();
             this.showImportModal = true;
+            this.loadImportHistory();
         },
         closeImportModal() {
             this.showImportModal = false;
-            this._clearImportTimer();
+            this._stopImportPoll();
             if (this.importResult && this.importResult.imported > 0) {
                 this.fetchAlumni();
             }
             this.importResult = null;
             this.importFile = null;
+            this.importJob = null;
             this._resetImportProgress();
+            this._watchActiveImports();
         },
         onImportFileChange(e) {
             this.importFile = e.target.files[0] || null;
@@ -392,10 +459,92 @@ createApp({
         _resetImportProgress() {
             this.importPhase = null;
             this.importUploadPct = 0;
-            this.importProcessPct = 0;
         },
-        _clearImportTimer() {
-            if (this._importTimer) { clearInterval(this._importTimer); this._importTimer = null; }
+        _stopImportPoll() {
+            if (this._importPoll) { clearTimeout(this._importPoll); this._importPoll = null; }
+        },
+        importStatusLabel(job) {
+            if (!job) return '';
+            switch (job.status) {
+                case 'queued': return job.queue_position > 0 ? ('Queued — #' + job.queue_position + ' in line') : 'Queued — starting shortly';
+                case 'processing': return 'Importing…';
+                case 'completed': return 'Completed';
+                case 'failed': return 'Failed';
+                case 'cancelled': return 'Cancelled';
+                default: return job.status;
+            }
+        },
+        importIsActive(job) {
+            return !!job && (job.status === 'queued' || job.status === 'processing');
+        },
+        async loadImportHistory() {
+            try {
+                const res = await fetch('/admin_alumni?action=importList', { headers: { Accept: 'application/json' } });
+                const data = await res.json();
+                if (data.success) {
+                    this.importHistory = data.imports;
+                    this.importActive = data.imports.filter(j => this.importIsActive(j)).length;
+                }
+            } catch (e) { /* history is a convenience; ignore */ }
+        },
+        // After a page load / closing the modal: if something is still running, keep the badge current (slow poll, only while visible).
+        _watchActiveImports() {
+            this._stopImportPoll();
+            if (this.importActive <= 0 || this.showImportModal) return;
+            this._importPoll = setTimeout(async () => {
+                if (!document.hidden) await this.loadImportHistory();
+                this._watchActiveImports();
+            }, 10000);
+        },
+        watchImport(job) {
+            this.importJob = job;
+            this.importResult = null;
+            this._pollImport(job.id, 0);
+        },
+        _pollImport(id, n) {
+            this._stopImportPoll();
+            // 2 s while it is young, then back off to 5 s; paused while the tab is hidden (resumes on the next tick).
+            const delay = n < 30 ? 2000 : 5000;
+            this._importPoll = setTimeout(async () => {
+                if (document.hidden) { this._pollImport(id, n); return; }
+                try {
+                    const res = await fetch('/admin_alumni?action=importStatus&id=' + encodeURIComponent(id), { headers: { Accept: 'application/json' } });
+                    const data = await res.json();
+                    if (data.success) {
+                        this.importJob = data.import;
+                        if (!this.importIsActive(data.import)) {
+                            this._importFinished(data.import);
+                            return;
+                        }
+                    }
+                } catch (e) { /* transient network error: keep polling */ }
+                this._pollImport(id, n + 1);
+            }, delay);
+        },
+        _importFinished(job) {
+            this.loadImportHistory();
+            if (job.status === 'completed') {
+                this.importResult = job.summary || { imported: job.successful_rows, skipped: job.failed_rows, experience_rows: 0, placeholder_emails: 0, emailed: 0 };
+                this.showNotification('Import finished: ' + job.successful_rows + ' alumni imported.', 'success');
+            } else if (job.status === 'failed') {
+                this.showNotification(job.error_message || 'Import failed.', 'error');
+            }
+        },
+        async cancelImport() {
+            if (!this.importJob || !this.importIsActive(this.importJob)) return;
+            if (!confirm('Cancel this import? Rows that were already imported are kept.')) return;
+            try {
+                const res = await fetch('/admin_alumni?action=importCancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify({ id: this.importJob.id }),
+                });
+                const data = await res.json();
+                this.showNotification(data.message, data.success ? 'success' : 'error');
+                this._pollImport(this.importJob.id, 0);
+            } catch (e) {
+                this.showNotification('Could not cancel the import.', 'error');
+            }
         },
         runImport() {
             if (!this.importFile || this.importing) return;
@@ -410,57 +559,38 @@ createApp({
 
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/admin_alumni?action=importEmploymentReport');
-            xhr.setRequestHeader('Accept', 'application/x-ndjson');
+            xhr.setRequestHeader('Accept', 'application/json');
 
-            // Real % for the file transfer.
+            // Real % for the file transfer (the only part the browser has to stay for).
             xhr.upload.onprogress = (e) => {
                 if (e.lengthComputable) {
                     this.importUploadPct = Math.round((e.loaded / e.total) * 100);
                 }
             };
-            xhr.upload.onload = () => {
-                this.importUploadPct = 100;
-                this.importPhase = 'processing';
-            };
+            xhr.upload.onload = () => { this.importUploadPct = 100; };
 
-            // The response is newline-delimited JSON streamed as the server
-            // works: {phase,done,total} ticks, then a final {success,...}. Parse
-            // whatever complete lines have arrived so far each time more data
-            // comes in — the % moves on this one connection, no polling.
-            let offset = 0;
-            let last = null;
-            const consume = () => {
-                const text = xhr.responseText;
-                let nl;
-                while ((nl = text.indexOf('\n', offset)) !== -1) {
-                    const line = text.slice(offset, nl).trim();
-                    offset = nl + 1;
-                    if (!line) continue;
-                    let msg;
-                    try { msg = JSON.parse(line); } catch (e) { continue; }
-                    last = msg;
-                    if (msg.total > 0 && typeof msg.done === 'number') {
-                        this.importProcessPct = Math.min(99, Math.round((msg.done / msg.total) * 100));
-                    }
-                    if (msg.phase === 'done') this.importProcessPct = 100;
-                }
-            };
-            xhr.onprogress = consume;
-
-            const finish = () => { this._clearImportTimer(); this.importing = false; this.importPhase = null; };
+            const finish = () => { this.importing = false; this.importPhase = null; };
             xhr.onload = () => {
-                consume();
                 finish();
-                const msg = last || {};
-                if (msg.success) {
-                    this.importResult = msg.summary;
+                let msg = {};
+                try { msg = JSON.parse(xhr.responseText); } catch (e) { /* non-JSON error page */ }
+                if (msg.success && msg.import) {
+                    this.importFile = null;
                     this.showNotification(msg.message, 'success');
+                    this.importActive = Math.max(1, this.importActive);
+                    if (msg.import.status === 'completed') {
+                        this.importJob = msg.import;
+                        this._importFinished(msg.import);   // sync queue (development): already done
+                    } else {
+                        this.watchImport(msg.import);
+                    }
+                    this.loadImportHistory();
                 } else {
-                    this.showNotification(msg.message || 'Import failed.', 'error');
+                    this.showNotification(msg.message || 'Import failed (HTTP ' + xhr.status + ').', 'error');
                 }
             };
-            xhr.onerror = () => { finish(); this.showNotification('Import failed — the connection was lost.', 'error'); };
-            xhr.ontimeout = () => { finish(); this.showNotification('Import timed out. Try a smaller file or split it by year.', 'error'); };
+            xhr.onerror = () => { finish(); this.showNotification('Upload failed — the connection was lost. Nothing was imported.', 'error'); };
+            xhr.ontimeout = () => { finish(); this.showNotification('Upload timed out. Check your connection and try again.', 'error'); };
 
             xhr.send(fd);
         },
@@ -598,66 +728,30 @@ createApp({
             this.notifications = this.notifications.filter(n => n.id !== id);
         },
         async fetchAlumni() {
+            const seq = (this._fetchSeq = (this._fetchSeq || 0) + 1);
             this.isLoading = true;
             try {
-                const response = await fetch('/admin_alumni?action=list', { credentials: 'include' });
+                const response = await fetch(this._alumniQuery(this.currentPage, this.itemsPerPage), { credentials: 'include' });
                 const data = await response.json();
+                if (seq !== this._fetchSeq) return;   // a newer request is in flight: ignore this stale answer
 
                 if (!data.success) {
                     this.showNotification(data.message || 'Failed to load alumni data', 'error');
                     return;
                 }
 
-                // The list endpoint already includes each alumni's
-                // skills/education/experience/resume (batched server-side) —
-                // no more per-alumni follow-up requests needed here.
-                this.alumni = data.alumni.map(alumni => {
-                    const experience = alumni.experience || [];
-                    let resume = null;
-                    if (alumni.resume && alumni.resume.file_name) {
-                        resume = {
-                            ...alumni.resume,
-                            url: 'uploads/resumes/' + alumni.resume.file_name
-                        };
-                    }
-
-                    return {
-                        id: alumni.alumni_id,
-                        first_name: alumni.first_name,
-                        middle_name: alumni.middle_name,
-                        last_name: alumni.last_name,
-                        email: alumni.email,
-                        secondary_email: alumni.secondary_email,
-                        gender: alumni.gender,
-                        year_graduated: alumni.year_graduated,
-                        course: alumni.course,
-                        college: alumni.college,
-                        province: alumni.province,
-                        city: alumni.city,
-                        status: alumni.status,
-                        campus_id: alumni.campus_id,
-                        birthdate: alumni.birthdate,
-                        contact: alumni.contact,
-                        civil_status: alumni.civil_status,
-                        verification_document: alumni.verification_document,
-                        profile_picture: alumni.profile_picture,
-                        skills: alumni.skills || [],
-                        education: alumni.education || [],
-                        experiences: experience,
-                        resume: resume,
-                        employment: experience.length > 0 ? {
-                            company_name: experience[0].company,
-                            position: experience[0].title,
-                            status: experience[0].employment_status,
-                            years: this.calculateYears(experience[0].start_date, experience[0].end_date)
-                        } : null
-                    };
-                });
+                // One page of alumni (with skills/education/experience/resume batched server-side); `total` is the number
+                // of rows matching the search/filters across the whole campus.
+                this.alumni = data.alumni.map(a => this._mapAlumni(a));
+                this.totalAlumni = data.total_capped ? 1000 : data.total;
+                this.totalCapped = !!data.total_capped;
+                const last = Math.ceil(data.total / this.itemsPerPage) || 1;
+                if (this.currentPage > last) this.currentPage = last;
             } catch (error) {
                 console.error('Error fetching alumni:', error);
                 this.showNotification('Error loading alumni data', 'error');
             } finally {
-                this.isLoading = false;
+                if (seq === this._fetchSeq) this.isLoading = false;
             }
         },
         // In the viewAlumniDetails method, update the skills display logic:
@@ -783,7 +877,7 @@ createApp({
             const columns = [
                 'Name', 'Email', 'Gender', 'Year Graduated', 'Course', 'College', 'Province', 'City/Municipality', 'Status'
             ];
-            const rows = this.filteredAlumni.map(a => [
+            const rows = (await this.fetchAllForExport()).map(a => [
                 `${a.first_name} ${a.middle_name} ${a.last_name}`,
                 a.email, a.gender, a.year_graduated, a.course, a.college, a.province, a.city, a.status
             ]);
@@ -796,7 +890,7 @@ createApp({
             const wb = XLSX.utils.book_new();
             const wsData = [
                 ['Name', 'Email', 'Gender', 'Year Graduated', 'Course', 'College', 'Province', 'City/Municipality', 'Status'],
-                ...this.filteredAlumni.map(a => [
+                ...(await this.fetchAllForExport()).map(a => [
                     `${a.first_name} ${a.middle_name} ${a.last_name}`,
                     a.email, a.gender, a.year_graduated, a.course, a.college, a.province, a.city, a.status
                 ])

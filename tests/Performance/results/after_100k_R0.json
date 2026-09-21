@@ -1,0 +1,434 @@
+{
+ "name": "after_100k_R0",
+ "base": "http://127.0.0.1:8092",
+ "duration_s": 248,
+ "overall": {
+  "n": 308,
+  "rps": 1.24,
+  "avg": 10386,
+  "p50": 264,
+  "p95": 106479,
+  "p99": 120012,
+  "max": 120017,
+  "err_5xx": 7,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 11,
+  "conn_err": 0,
+  "ok": 290,
+  "kb": 22
+ },
+ "byLabel": {
+  "loc:alumniAtLocation": {
+   "n": 31,
+   "rps": 0.12,
+   "avg": 3336,
+   "p50": 371,
+   "p95": 10371,
+   "p99": 51630,
+   "max": 51630,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 31,
+   "kb": 4
+  },
+  "dash:page": {
+   "n": 8,
+   "rps": 0.03,
+   "avg": 566,
+   "p50": 420,
+   "p95": 1348,
+   "p99": 1348,
+   "max": 1348,
+   "err_5xx": 4,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 4,
+   "kb": 18
+  },
+  "rep:page": {
+   "n": 5,
+   "rps": 0.02,
+   "avg": 1293,
+   "p50": 987,
+   "p95": 2599,
+   "p99": 2599,
+   "max": 2599,
+   "err_5xx": 2,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 3,
+   "kb": 24
+  },
+  "nav:profile": {
+   "n": 54,
+   "rps": 0.22,
+   "avg": 232,
+   "p50": 194,
+   "p95": 553,
+   "p99": 783,
+   "max": 783,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 54,
+   "kb": 0
+  },
+  "rep:colleges": {
+   "n": 5,
+   "rps": 0.02,
+   "avg": 8670,
+   "p50": 10224,
+   "p95": 21777,
+   "p99": 21777,
+   "max": 21777,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 5,
+   "kb": 0
+  },
+  "rep:years": {
+   "n": 5,
+   "rps": 0.02,
+   "avg": 18919,
+   "p50": 11436,
+   "p95": 54815,
+   "p99": 54815,
+   "max": 54815,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 5,
+   "kb": 0
+  },
+  "nav:settings": {
+   "n": 54,
+   "rps": 0.22,
+   "avg": 1410,
+   "p50": 200,
+   "p95": 1861,
+   "p99": 30808,
+   "max": 30808,
+   "err_5xx": 1,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 53,
+   "kb": 31
+  },
+  "nav:notification": {
+   "n": 54,
+   "rps": 0.22,
+   "avg": 1568,
+   "p50": 236,
+   "p95": 7913,
+   "p99": 51630,
+   "max": 51630,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 54,
+   "kb": 28
+  },
+  "dash:courseWorkAlignment": {
+   "n": 8,
+   "rps": 0.03,
+   "avg": 35224,
+   "p50": 29330,
+   "p95": 59165,
+   "p99": 59165,
+   "max": 59165,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 8,
+   "kb": 19
+  },
+  "dash:employmentStatusByCampus": {
+   "n": 8,
+   "rps": 0.03,
+   "avg": 58616,
+   "p50": 28032,
+   "p95": 118079,
+   "p99": 118079,
+   "max": 118079,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 8,
+   "kb": 14
+  },
+  "nav:user": {
+   "n": 54,
+   "rps": 0.22,
+   "avg": 1475,
+   "p50": 176,
+   "p95": 4652,
+   "p99": 54621,
+   "max": 54621,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 54,
+   "kb": 49
+  },
+  "search:paginatedList(q)": {
+   "n": 2,
+   "rps": 0.01,
+   "avg": 109950,
+   "p50": 99885,
+   "p95": 120014,
+   "p99": 120014,
+   "max": 120014,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 1,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 11
+  },
+  "dash:stats": {
+   "n": 8,
+   "rps": 0.03,
+   "avg": 118675,
+   "p50": 120008,
+   "p95": 120017,
+   "p99": 120017,
+   "max": 120017,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 7,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 12
+  },
+  "rep:summary": {
+   "n": 5,
+   "rps": 0.02,
+   "avg": 93497,
+   "p50": 120000,
+   "p95": 120012,
+   "p99": 120012,
+   "max": 120012,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 3,
+   "conn_err": 0,
+   "ok": 2,
+   "kb": 6
+  },
+  "rep:summary(filter year)": {
+   "n": 5,
+   "rps": 0.02,
+   "avg": 21199,
+   "p50": 13383,
+   "p95": 46871,
+   "p99": 46871,
+   "max": 46871,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 5,
+   "kb": 17
+  },
+  "search:paginatedList(page)": {
+   "n": 2,
+   "rps": 0.01,
+   "avg": 100011,
+   "p50": 93544,
+   "p95": 106479,
+   "p99": 106479,
+   "max": 106479,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 2,
+   "kb": 22
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 39,
+   "p50": 49648,
+   "p95": 120014
+  },
+  {
+   "t": 10,
+   "n": 1,
+   "p50": 51630,
+   "p95": 51630
+  },
+  {
+   "t": 50,
+   "n": 1,
+   "p50": 9468,
+   "p95": 9468
+  },
+  {
+   "t": 60,
+   "n": 24,
+   "p50": 167,
+   "p95": 409
+  },
+  {
+   "t": 70,
+   "n": 46,
+   "p50": 115,
+   "p95": 419
+  },
+  {
+   "t": 80,
+   "n": 36,
+   "p50": 211,
+   "p95": 624
+  },
+  {
+   "t": 90,
+   "n": 35,
+   "p50": 204,
+   "p95": 842
+  },
+  {
+   "t": 100,
+   "n": 29,
+   "p50": 241,
+   "p95": 1861
+  },
+  {
+   "t": 110,
+   "n": 36,
+   "p50": 246,
+   "p95": 911
+  },
+  {
+   "t": 120,
+   "n": 37,
+   "p50": 553,
+   "p95": 120009
+  },
+  {
+   "t": 130,
+   "n": 9,
+   "p50": 395,
+   "p95": 24711
+  },
+  {
+   "t": 140,
+   "n": 9,
+   "p50": 371,
+   "p95": 82763
+  },
+  {
+   "t": 150,
+   "n": 3,
+   "p50": 8275,
+   "p95": 13383
+  },
+  {
+   "t": 160,
+   "n": 2,
+   "p50": 178,
+   "p95": 4652
+  },
+  {
+   "t": 230,
+   "n": 1,
+   "p50": 13137,
+   "p95": 13137
+  }
+ ],
+ "errBodies": [
+  {
+   "label": "dash:page",
+   "path": "/superadmin_dashboard",
+   "status": 500,
+   "body": "{ \"message\": \"Server Error\" }"
+  },
+  {
+   "label": "rep:page",
+   "path": "/superadmin_reports",
+   "status": 500,
+   "body": "{ \"message\": \"Server Error\" }"
+  },
+  {
+   "label": "dash:page",
+   "path": "/admin_dashboard",
+   "status": 500,
+   "body": "{ \"message\": \"Server Error\" }"
+  },
+  {
+   "label": "dash:page",
+   "path": "/superadmin_dashboard",
+   "status": 500,
+   "body": "{ \"message\": \"Server Error\" }"
+  },
+  {
+   "label": "dash:page",
+   "path": "/superadmin_dashboard",
+   "status": 500,
+   "body": "{ \"message\": \"Server Error\" }"
+  },
+  {
+   "label": "nav:settings",
+   "path": "/admin_settings",
+   "status": 500,
+   "body": "{ \"message\": \"Server Error\" }"
+  },
+  {
+   "label": "rep:page",
+   "path": "/admin_reports",
+   "status": 500,
+   "body": "{ \"message\": \"Server Error\" }"
+  }
+ ],
+ "upload_window_ms": null
+}

@@ -1,0 +1,196 @@
+{
+ "name": "smoke",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 7,
+ "overall": {
+  "n": 16,
+  "rps": 2.27,
+  "avg": 33,
+  "p50": 31,
+  "p95": 51,
+  "p99": 51,
+  "max": 51,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 16,
+  "kb": 27
+ },
+ "byLabel": {
+  "nav:profile": {
+   "n": 4,
+   "rps": 0.57,
+   "avg": 32,
+   "p50": 37,
+   "p95": 40,
+   "p99": 40,
+   "max": 40,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 4,
+   "kb": 0
+  },
+  "nav:settings": {
+   "n": 4,
+   "rps": 0.57,
+   "avg": 39,
+   "p50": 35,
+   "p95": 51,
+   "p99": 51,
+   "max": 51,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 4,
+   "kb": 31
+  },
+  "nav:notification": {
+   "n": 4,
+   "rps": 0.57,
+   "avg": 29,
+   "p50": 29,
+   "p95": 31,
+   "p99": 31,
+   "max": 31,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 4,
+   "kb": 28
+  },
+  "nav:user": {
+   "n": 4,
+   "rps": 0.57,
+   "avg": 32,
+   "p50": 31,
+   "p95": 51,
+   "p99": 51,
+   "max": 51,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 4,
+   "kb": 49
+  }
+ },
+ "uploads": [
+  {
+   "acct": 1,
+   "file": "m20000.xlsx",
+   "bytes": 1520391,
+   "t0": 546,
+   "progress": [
+    [
+     120,
+     "queued",
+     0,
+     0
+    ],
+    [
+     2159,
+     "processing",
+     7000,
+     0
+    ],
+    [
+     4207,
+     "processing",
+     15000,
+     0
+    ],
+    [
+     6253,
+     "completed",
+     20000,
+     0
+    ]
+   ],
+   "final": {
+    "id": 1,
+    "campus_id": 7,
+    "filename": "m20000.xlsx",
+    "status": "completed",
+    "total_rows": 0,
+    "processed_rows": 20000,
+    "successful_rows": 20000,
+    "failed_rows": 0,
+    "percent": 100,
+    "attempts": 1,
+    "queue_position": 0,
+    "error_message": null,
+    "created_at": "2026-09-21 11:10:37",
+    "started_at": "2026-09-21 11:10:37",
+    "completed_at": "2026-09-21 11:10:42",
+    "failed_at": null,
+    "summary": {
+     "graduate_rows": 20000,
+     "imported": 20000,
+     "skipped": 0,
+     "placeholder_emails": 8033,
+     "experience_rows": 16539,
+     "emailed": 0,
+     "sheets": {
+      "Graduates": "20000 graduate rows"
+     },
+     "warnings": [],
+     "errors": [],
+     "skipped_details": [],
+     "samples": []
+    },
+    "success": true,
+    "phase": "completed"
+   },
+   "http": 202,
+   "err": null,
+   "post_ms": 119,
+   "import_id": 1,
+   "started_ms": 2159,
+   "ms": 6253,
+   "rows_done_when_ended": 20000
+  }
+ ],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 16,
+   "p50": 31,
+   "p95": 51
+  }
+ ],
+ "errBodies": [],
+ "upload_window_ms": 6799,
+ "during_upload": {
+  "n": 16,
+  "rps": 2.35,
+  "avg": 33,
+  "p50": 31,
+  "p95": 51,
+  "p99": 51,
+  "max": 51,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 16,
+  "kb": 27
+ },
+ "after_upload": null
+}

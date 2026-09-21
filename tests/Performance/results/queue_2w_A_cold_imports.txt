@@ -1,0 +1,9 @@
+summaries settled after 0s (stale partitions=0, queued rebuilds=0)
+import #1 campus=7 completed rows=0 ok=100000 skipped=0 queue_wait=3s run=448s summary_lag_after_completion=193s (rebuild 110578ms)
+failed_jobs: 0
+user                  1,000,307
+alumni                1,000,000
+alumni_education      1,000,000
+alumni_experience       650,186
+applications             19,980
+audit_logs                    2

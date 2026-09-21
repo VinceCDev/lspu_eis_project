@@ -1,12 +1,15 @@
 # LSPU EIS — production Docker stack for a single VPS.
 #
-#   app   PHP-FPM (imports database/schema.sql + caches config on boot)
-#   web   Nginx, published on ${WEB_PORT:-8080}
-#   db    MySQL 8
+#   app              PHP-FPM (runs migrations + caches config on boot; fails the deploy if a migration fails)
+#   web              Nginx, published on ${WEB_PORT:-8080}
+#   db               MySQL 8
+#   queue-imports    ${IMPORT_WORKERS:-2} workers for bulk alumni imports (queue "imports"): the upload request only stores the
+#                    file; these process it in chunks with progress + resume. At most IMPORT_WORKERS imports run at once.
+#   queue-summaries  1 worker that rebuilds the Dashboard/Reports summary tables (queue "summaries")
+#   scheduler        `schedule:work`: recovers imports whose worker died, refreshes stale/daily summaries, purges old uploads
 #
-# This app does NOT use queues (its `jobs` table is job postings, not a
-# Laravel queue table) and defines no scheduled tasks, so there is no
-# queue worker or scheduler service. QUEUE_CONNECTION is forced to sync.
+# Laravel's queue uses the `queue_jobs` table (NOT `jobs` - that one holds job postings), so no extra infrastructure (Redis) is
+# needed; the database queue is enough for a handful of long-running imports.
 #
 # Config can be overridden via environment variables (Hostinger Docker
 # Manager env panel, or a .env file next to this compose file); sensible
@@ -28,7 +31,10 @@ x-laravel-env: &laravel-env
   DB_PASSWORD: "${DB_PASSWORD:-lspu_eis_db_pass}"
   SESSION_DRIVER: database
   CACHE_STORE: database
-  QUEUE_CONNECTION: sync
+  QUEUE_CONNECTION: database
+  IMPORT_WORKERS: "${IMPORT_WORKERS:-2}"
+  IMPORT_CHUNK_SIZE: "${IMPORT_CHUNK_SIZE:-1000}"
+  REPORTING_SUMMARY: "${REPORTING_SUMMARY:-true}"
   FILESYSTEM_DISK: local
   MAIL_MAILER: "${MAIL_MAILER:-log}"
   SUPERADMIN_EMAIL: "${SUPERADMIN_EMAIL:-lspueis@gmail.com}"
@@ -49,6 +55,58 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # php-fpm only starts listening once the entrypoint (migrations, verification) succeeded.
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'exit(@fsockopen(\"127.0.0.1\", 9000) ? 0 : 1);'"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+
+  # Bulk imports. Shares the storage volume with `app` (the upload lands there). Concurrency is capped in the application
+  # (config/import.php: IMPORT_WORKERS imports "processing" at once), so replicas > IMPORT_WORKERS would just idle.
+  queue-imports:
+    image: lspu-eis-app:latest
+    restart: unless-stopped
+    environment:
+      <<: *laravel-env
+      APP_BOOTSTRAP: "skip"
+    command: >-
+      php artisan queue:work database_long --queue=imports --timeout=3600 --sleep=2 --tries=1 --memory=512 --max-time=3600
+    deploy:
+      replicas: ${IMPORT_WORKERS:-2}
+    volumes:
+      - storage-data:/var/www/html/storage
+    depends_on:
+      app:
+        condition: service_healthy
+
+  queue-summaries:
+    image: lspu-eis-app:latest
+    restart: unless-stopped
+    environment:
+      <<: *laravel-env
+      APP_BOOTSTRAP: "skip"
+    command: >-
+      php artisan queue:work database --queue=summaries,default --timeout=1800 --sleep=2 --tries=3 --memory=512 --max-time=3600
+    volumes:
+      - storage-data:/var/www/html/storage
+    depends_on:
+      app:
+        condition: service_healthy
+
+  scheduler:
+    image: lspu-eis-app:latest
+    restart: unless-stopped
+    environment:
+      <<: *laravel-env
+      APP_BOOTSTRAP: "skip"
+    command: php artisan schedule:work
+    volumes:
+      - storage-data:/var/www/html/storage
+    depends_on:
+      app:
+        condition: service_healthy
 
   web:
     build:
@@ -67,11 +125,14 @@ services:
     image: mysql:8.0
     # native password auth so the (MariaDB) mysql client in the app image
     # can connect without caching_sha2_password; a bigger buffer pool keeps
-    # the reporting GROUP BYs in memory on a small VPS.
+    # the reporting GROUP BYs in memory on a small VPS. redo-log-capacity=1G: a 100k-row
+    # import writes ~120 MB of redo; with MySQL 8.0's default (100 MB) checkpoint stalls made the
+    # same import 3.2x slower (48 s -> 160 s, chunk p95 0.6 s -> 3-4 s) - measured, see AUDIT_QUEUE.md.
     command: >-
       --default-authentication-plugin=mysql_native_password
       --innodb-buffer-pool-size=384M
       --innodb-flush-neighbors=0
+      --innodb-redo-log-capacity=1G
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: "${DB_DATABASE:-lspu_eis}"

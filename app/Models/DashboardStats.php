@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Concerns\LegacyQueries;
+use App\Services\ReportingSummary;
+use App\Services\SummaryReader;
 use Illuminate\Support\Facades\DB;
 
 /** Ported from backend/Models/DashboardStats.php — see User.php's docblock for the porting approach. */
@@ -17,6 +19,23 @@ class DashboardStats
     {
         $this->campusId = $campusId;
         $this->college = ($college !== null && $college !== '') ? $college : null;
+    }
+
+    private ?SummaryReader $summaryReader = null;
+    private bool $summaryChecked = false;
+
+    /**
+     * The pre-aggregated reader (rpt_* tables) when every campus partition in scope has been built, else null - and then every
+     * method below runs its original live query. Live path = correct but O(alumni); summary path = O(#programs).
+     */
+    private function summary(): ?SummaryReader
+    {
+        if (!$this->summaryChecked) {
+            $this->summaryChecked = true;
+            $this->summaryReader = ReportingSummary::ready($this->campusId) ? new SummaryReader($this->campusId, $this->college) : null;
+        }
+
+        return $this->summaryReader;
     }
 
     /** WHERE/AND clause scoping a query to the current campus and/or college, or '' when neither is set. */
@@ -206,7 +225,7 @@ class DashboardStats
                 GROUP BY a.college';
 
         $colleges = [];
-        foreach ($this->selectAll($sql) as $row) {
+        foreach ($this->summary()?->graduatesPerCollege() ?? $this->selectAll($sql) as $row) {
             $colleges[$this->abbreviateCollege($row['college'])] = [
                 'graduates' => (int) $row['graduates'],
                 'employed' => (int) $row['employed'],
@@ -222,7 +241,7 @@ class DashboardStats
         $statusLabels = [...self::EMPLOYED_STATUS_BUCKETS, 'Unemployed'];
         $programs = [];
 
-        foreach ($this->selectAll('SELECT course, college FROM alumni'.$this->campusClause('alumni', true).' GROUP BY course, college') as $row) {
+        foreach ($this->summary()?->programKeys() ?? $this->selectAll('SELECT course, college FROM alumni'.$this->campusClause('alumni', true).' GROUP BY course, college') as $row) {
             $program = $this->abbreviateCourse(Report::normalizeProgram($row['college'], $row['course']));
             if (!isset($programs[$program])) {
                 $programs[$program] = array_fill_keys($statusLabels, 0);
@@ -236,7 +255,7 @@ class DashboardStats
                                    WHERE (e.current = 1 OR (e.end_date IS NULL OR e.end_date >= ?))"
                                    .$this->campusClause('a')."
                                    GROUP BY a.course, a.college, e.employment_status";
-        foreach ($this->selectAll($sql, [$currentDate]) as $row) {
+        foreach ($this->summary()?->activeStatusRows() ?? $this->selectAll($sql, [$currentDate]) as $row) {
             $program = $this->abbreviateCourse(Report::normalizeProgram($row['college'], $row['course']));
             $status = self::canonicalEmployedStatus($row['employment_status']);
             if (isset($programs[$program][$status])) {
@@ -258,7 +277,7 @@ class DashboardStats
                                    WHERE e.alumni_id IS NULL'
                                    .$this->campusClause('a')
                                    .' GROUP BY a.course, a.college';
-        foreach ($this->selectAll($sql) as $row) {
+        foreach ($this->summary()?->unemployedRows() ?? $this->selectAll($sql) as $row) {
             $program = $this->abbreviateCourse(Report::normalizeProgram($row['college'], $row['course']));
             if (isset($programs[$program])) {
                 $programs[$program]['Unemployed'] += (int) $row['cnt'];
@@ -292,7 +311,8 @@ class DashboardStats
 
         // 1. Program keys per campus (so programs with zero employment still show).
         $out = [];
-        foreach ($this->selectAll(
+        $sum = ReportingSummary::ready(null) ? new SummaryReader() : null;   // several campuses: every partition must be built
+        foreach ($sum?->programKeysByCampus($campusIds) ?? $this->selectAll(
             "SELECT a.campus_id, a.course, a.college
              FROM alumni a
              WHERE a.campus_id IN ({$in})
@@ -306,7 +326,7 @@ class DashboardStats
         }
 
         // 2. Active-experience status counts per campus/program.
-        foreach ($this->selectAll(
+        foreach ($sum?->activeStatusRowsByCampus($campusIds) ?? $this->selectAll(
             "SELECT a.campus_id, a.course, a.college, e.employment_status, COUNT(DISTINCT a.alumni_id) AS cnt
              FROM alumni a
              JOIN alumni_experience e ON e.alumni_id = a.alumni_id
@@ -324,7 +344,7 @@ class DashboardStats
         }
 
         // 3. Unemployed (no active experience) per campus/program — anti-join.
-        foreach ($this->selectAll(
+        foreach ($sum?->unemployedRowsByCampus($campusIds) ?? $this->selectAll(
             "SELECT a.campus_id, a.course, a.college, COUNT(*) AS cnt
              FROM alumni a
              LEFT JOIN alumni_experience e
@@ -359,7 +379,8 @@ class DashboardStats
         $in = implode(',', $campusIds);
 
         $out = [];
-        foreach ($this->selectAll(
+        $sum = ReportingSummary::ready(null) ? new SummaryReader() : null;
+        foreach ($sum?->collegesByCampus($campusIds) ?? $this->selectAll(
             "SELECT DISTINCT campus_id, college
              FROM alumni
              WHERE campus_id IN ({$in}) AND college IS NOT NULL AND college <> ''
@@ -380,7 +401,7 @@ class DashboardStats
                                    WHERE (current = 1 OR (end_date IS NULL OR end_date >= CURDATE()))'
                                    .$this->campusClause('a').'
                                    GROUP BY location_of_work';
-        foreach ($this->selectAll($sql) as $row) {
+        foreach ($this->summary()?->activeLocation() ?? $this->selectAll($sql) as $row) {
             if (isset($dist[$row['location_of_work']])) {
                 $dist[$row['location_of_work']] = (int) $row['cnt'];
             }
@@ -398,7 +419,7 @@ class DashboardStats
                                    WHERE (current = 1 OR (end_date IS NULL OR end_date >= CURDATE()))'
                                    .$this->campusClause('a').'
                                    GROUP BY employment_sector';
-        foreach ($this->selectAll($sql) as $row) {
+        foreach ($this->summary()?->activeSector() ?? $this->selectAll($sql) as $row) {
             if (isset($dist[$row['employment_sector']])) {
                 $dist[$row['employment_sector']] = (int) $row['cnt'];
             }
@@ -409,17 +430,15 @@ class DashboardStats
 
     private function coursesPerLocation(): array
     {
+        // One pass: the old code ran this exact join twice (as "graduates" and again as "employed") and the two counts are
+        // identical by construction (both COUNT(DISTINCT alumni_id) over current = 1 rows).
         $courses = [];
-        foreach ($this->selectAll('SELECT location_of_work, a.course, COUNT(DISTINCT a.alumni_id) as graduates FROM alumni_experience e JOIN alumni a ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY location_of_work, a.course') as $row) {
+        $rows = $this->summary() !== null
+            ? array_map(static fn ($r) => $r + ['n' => $r['cnt']], $this->summary()->currentLocationByCourse())
+            : $this->selectAll('SELECT location_of_work, a.course, COUNT(DISTINCT a.alumni_id) as n FROM alumni_experience e JOIN alumni a ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY location_of_work, a.course');
+        foreach ($rows as $row) {
             $loc = $row['location_of_work'] ?: '';
-            $courses[$loc][$row['course']] = ['graduates' => (int) $row['graduates'], 'employed' => 0];
-        }
-
-        foreach ($this->selectAll('SELECT location_of_work, a.course, COUNT(DISTINCT a.alumni_id) as employed FROM alumni_experience e JOIN alumni a ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY location_of_work, a.course') as $row) {
-            $loc = $row['location_of_work'] ?: '';
-            if (isset($courses[$loc][$row['course']])) {
-                $courses[$loc][$row['course']]['employed'] = (int) $row['employed'];
-            }
+            $courses[$loc][$row['course']] = ['graduates' => (int) $row['n'], 'employed' => (int) $row['n']];
         }
 
         return $courses;
@@ -428,19 +447,27 @@ class DashboardStats
     private function coursesPerSector(): array
     {
         $courses = [];
-        foreach ($this->selectAll('SELECT employment_sector, a.course, COUNT(DISTINCT a.alumni_id) as graduates FROM alumni_experience e JOIN alumni a ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY employment_sector, a.course') as $row) {
+        $rows = $this->summary() !== null
+            ? array_map(static fn ($r) => $r + ['n' => $r['cnt']], $this->summary()->currentSectorByCourse())
+            : $this->selectAll('SELECT employment_sector, a.course, COUNT(DISTINCT a.alumni_id) as n FROM alumni_experience e JOIN alumni a ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY employment_sector, a.course');
+        foreach ($rows as $row) {
             $sec = $row['employment_sector'] ?: '';
-            $courses[$sec][$row['course']] = ['graduates' => (int) $row['graduates'], 'employed' => 0];
-        }
-
-        foreach ($this->selectAll('SELECT employment_sector, a.course, COUNT(DISTINCT a.alumni_id) as employed FROM alumni_experience e JOIN alumni a ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY employment_sector, a.course') as $row) {
-            $sec = $row['employment_sector'] ?: '';
-            if (isset($courses[$sec][$row['course']])) {
-                $courses[$sec][$row['course']]['employed'] = (int) $row['employed'];
-            }
+            $courses[$sec][$row['course']] = ['graduates' => (int) $row['n'], 'employed' => (int) $row['n']];
         }
 
         return $courses;
+    }
+
+    /**
+     * (course, job title, count) for currently-employed alumni. Same information as currentCourseJobTitles() but grouped in SQL:
+     * that method returned ONE ROW PER EMPLOYED ALUMNUS into PHP (650k rows / >1 GB at 1M alumni => HTTP 500), while the
+     * number of distinct (course, title) pairs stays in the low thousands however many alumni there are.
+     *
+     * @return array<int, array{course: string, title: string, cnt: int}>
+     */
+    public function currentCourseJobTitleCounts(): array
+    {
+        return $this->summary()?->currentCourseJobTitleCounts() ?? $this->selectAll('SELECT a.course, e.title, COUNT(*) AS cnt FROM alumni a JOIN alumni_experience e ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY a.course, e.title');
     }
 
     /** Raw (course, job title) pairs for currently-employed alumni; alignment classification happens in the Service layer. */
@@ -471,9 +498,14 @@ class DashboardStats
             [$yesterdayStart, $todayStart]
         );
 
-        $alumniSql = 'SELECT COUNT(*) as total, SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) as yesterday FROM alumni'
-            .$this->campusClause('alumni', true);
-        $alumni = $this->selectOne($alumniSql, [$yesterdayStart, $todayStart]);
+        // Summary: total + "created yesterday" were counted when the campus partition was built (rebuilt at least daily), so this
+        // card no longer scans (or range-scans + looks up) up to 600k rows just imported yesterday.
+        $alumni = $this->summary()?->alumniTotals()
+            ?? $this->selectOne(
+                'SELECT COUNT(*) as total, SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) as yesterday FROM alumni'
+                    .$this->campusClause('alumni', true),
+                [$yesterdayStart, $todayStart]
+            );
 
         $jobs = $this->selectOne(
             'SELECT COUNT(*) as total, SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) as yesterday FROM jobs',
@@ -482,7 +514,7 @@ class DashboardStats
 
         $applicationsSql = 'SELECT COUNT(*) as total, SUM(CASE WHEN app.applied_at >= ? AND app.applied_at < ? THEN 1 ELSE 0 END) as yesterday
             FROM applications app JOIN alumni a ON app.alumni_id = a.alumni_id'.$this->campusClause('a', true);
-        $applications = $this->selectOne($applicationsSql, [$yesterdayStart, $todayStart]);
+        $applications = $this->summary()?->applicationTotals() ?? $this->selectOne($applicationsSql, [$yesterdayStart, $todayStart]);
 
         return [
             'total_companies' => (int) ($companies['total'] ?? 0),
@@ -519,7 +551,7 @@ class DashboardStats
                 GROUP BY a.city, a.province, a.course';
 
         $clusters = [];
-        foreach ($this->selectAll($sql) as $row) {
+        foreach ($this->summary()?->locationClusters() ?? $this->selectAll($sql) as $row) {
             $key = $row['city'].', '.$row['province'];
             if (!isset($clusters[$key])) {
                 $clusters[$key] = [

@@ -1,0 +1,65 @@
+{
+ "name": "L2m_export_c1",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 123,
+ "overall": {
+  "n": 1,
+  "rps": 0.01,
+  "avg": 123010,
+  "p50": 123010,
+  "p95": 123010,
+  "p99": 123010,
+  "max": 123010,
+  "err_5xx": 1,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 0,
+  "kb": 0
+ },
+ "byLabel": {
+  "rep:fullData(export)": {
+   "n": 1,
+   "rps": 0.01,
+   "avg": 123010,
+   "p50": 123010,
+   "p95": 123010,
+   "p99": 123010,
+   "max": 123010,
+   "err_5xx": 1,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 0,
+   "kb": 0,
+   "perf": {
+    "db_ms_avg": 0,
+    "q_avg": 0,
+    "dupe_avg": 0,
+    "mem_mb_max": 0
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 1,
+   "p50": 123010,
+   "p95": 123010
+  }
+ ],
+ "errBodies": [
+  {
+   "label": "rep:fullData(export)",
+   "path": "/admin_reports?action=fullData",
+   "status": 500,
+   "body": "{ \"message\": \"Server Error\" }"
+  }
+ ],
+ "upload_window_ms": null
+}

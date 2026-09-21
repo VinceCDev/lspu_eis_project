@@ -8,6 +8,8 @@ use App\Models\Report;
 use App\Services\Auth;
 use App\Services\MailService;
 use App\Services\ReportService;
+use App\Services\ReportingSummary;
+use App\Support\HeavyCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -17,6 +19,9 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 /** Ported from backend/Controllers/Admin/ReportController.php. */
 class ReportController extends Controller
 {
+    /** Largest scope the synchronous full export will serve (see fullData()). */
+    private const MAX_EXPORT_ALUMNI = 50000;
+
     public function index()
     {
         return view('admin.reports', [
@@ -39,13 +44,19 @@ class ReportController extends Controller
         // Aggregated report figures change only when alumni/experience data
         // does (imports, edits) — a short TTL keeps the page snappy and stops
         // concurrent tabs/admins each rebuilding it.
-        $data = Cache::remember(
-            $this->reportCacheKey('summary', $campusId, $college, $yearGraduated),
-            300,
-            fn () => (new ReportService(null, null, $campusId, $college, $yearGraduated))->summary()
-        );
+        return response()->json($this->cachedSummary($campusId, $college, $yearGraduated));
+    }
 
-        return response()->json($data);
+    /** Report summary for a scope: cached (single builder, stale-while-revalidate); on a miss it is built from the summary tables. */
+    private function cachedSummary(?int $campusId, ?string $college, ?int $yearGraduated): array
+    {
+        return HeavyCache::remember(
+            $this->reportCacheKey('summary', $campusId, $college, $yearGraduated),
+            (int) config('reporting.cache_fresh'),
+            (int) config('reporting.cache_keep'),
+            fn () => (new ReportService(null, null, $campusId, $college, $yearGraduated))->summary(),
+            [ReportingSummary::scopeFor($campusId)]
+        );
     }
 
     public function fullData(Request $request): JsonResponse
@@ -54,10 +65,24 @@ class ReportController extends Controller
         $college = $request->query('college');
         $yearGraduated = $this->resolveYearGraduated($request->query('year_graduated'));
 
-        $data = Cache::remember(
+        // fullReportData() returns one row per alumnus (detailed_employment, industry_analysis, ...) built in PHP memory and
+        // serialised as one JSON document. Measured: 36 s then HTTP 500 (memory) at 150k alumni. Refuse instead of
+        // burning a worker + the DB for a minute, and tell the admin how to narrow the export.
+        $inScope = (new Report($campusId, $college, $yearGraduated))->alumniCount();
+        if ($inScope > self::MAX_EXPORT_ALUMNI) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This report covers '.number_format($inScope).' graduates, which is too many to export in one file (limit '
+                    .number_format(self::MAX_EXPORT_ALUMNI).'). Narrow it by campus, college or graduation year and try again.',
+            ], 422);
+        }
+
+        $data = HeavyCache::remember(
             $this->reportCacheKey('full', $campusId, $college, $yearGraduated),
-            300,
-            fn () => (new ReportService(null, null, $campusId, $college, $yearGraduated))->fullReportData()
+            (int) config('reporting.cache_fresh'),
+            (int) config('reporting.cache_keep'),
+            fn () => (new ReportService(null, null, $campusId, $college, $yearGraduated))->fullReportData(),
+            [ReportingSummary::scopeFor($campusId)]
         );
         $data['campus_name'] = $campusId !== null ? $this->campusName($campusId) : 'All Campuses';
 
@@ -97,7 +122,7 @@ class ReportController extends Controller
         $yearGraduated = $this->resolveYearGraduated($request->input('year_graduated'));
         $scopeLabel = $college ?: ($campusId !== null ? $this->campusName($campusId) : 'All Campuses');
 
-        $summary = (new ReportService(null, null, $campusId, $college, $yearGraduated))->summary();
+        $summary = $this->cachedSummary($campusId, $college, $yearGraduated);
 
         $filenameScope = preg_replace('/[^A-Za-z0-9]+/', '_', $scopeLabel) ?: 'Report';
 

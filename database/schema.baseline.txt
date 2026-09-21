@@ -1,0 +1,15 @@
+# Migrations whose changes database/schema.sql ALREADY contains.
+#
+# docker/entrypoint.sh imports schema.sql into an empty database and records exactly these names as applied (one per line, no
+# ".php"), then runs `php artisan migrate --force`, which really executes every migration NOT listed here (and stops the
+# deployment if one fails). Before this file existed the entrypoint recorded EVERY migration file as applied after importing
+# schema.sql - so a migration that schema.sql did not actually reflect (the 2026_09_09 reporting indexes) was marked done
+# without ever running.
+#
+# When schema.sql is regenerated from a database that has run migration X, add X here. Never add a migration schema.sql lacks.
+2026_09_05_112131_add_missing_performance_indexes
+2026_09_05_122048_remove_orphaned_application_records
+2026_09_06_035717_make_admin_created_account_optional_fields_nullable
+2026_09_06_140000_create_job_questions_and_application_answers
+2026_09_09_170000_add_reporting_indexes_for_bulk_alumni
+2026_09_21_000000_ensure_reporting_and_covering_indexes

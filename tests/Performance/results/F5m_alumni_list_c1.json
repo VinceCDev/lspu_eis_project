@@ -1,0 +1,81 @@
+{
+ "name": "F5m_alumni_list_c1",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 1,
+ "overall": {
+  "n": 2,
+  "rps": 1.88,
+  "avg": 110,
+  "p50": 102,
+  "p95": 118,
+  "p99": 118,
+  "max": 118,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 2,
+  "kb": 41
+ },
+ "byLabel": {
+  "alumni:page": {
+   "n": 1,
+   "rps": 0.94,
+   "avg": 102,
+   "p50": 102,
+   "p95": 102,
+   "p99": 102,
+   "max": 102,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 77,
+   "perf": {
+    "db_ms_avg": 0,
+    "q_avg": 0,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  },
+  "alumni:paginatedList(p1)": {
+   "n": 1,
+   "rps": 0.94,
+   "avg": 118,
+   "p50": 118,
+   "p95": 118,
+   "p99": 118,
+   "max": 118,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 5,
+   "perf": {
+    "db_ms_avg": 18,
+    "q_avg": 9,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 2,
+   "p50": 102,
+   "p95": 118
+  }
+ ],
+ "errBodies": [],
+ "upload_window_ms": null
+}

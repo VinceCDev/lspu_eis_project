@@ -1,0 +1,127 @@
+{
+ "name": "F2m_dashboard_super_warm",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 0,
+ "overall": {
+  "n": 4,
+  "rps": 8.66,
+  "avg": 39,
+  "p50": 38,
+  "p95": 41,
+  "p99": 41,
+  "max": 41,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 4,
+  "kb": 32
+ },
+ "byLabel": {
+  "dash:page": {
+   "n": 1,
+   "rps": 2.16,
+   "avg": 41,
+   "p50": 41,
+   "p95": 41,
+   "p99": 41,
+   "max": 41,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 42,
+   "perf": {
+    "db_ms_avg": 0,
+    "q_avg": 0,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  },
+  "dash:stats": {
+   "n": 1,
+   "rps": 2.16,
+   "avg": 35,
+   "p50": 35,
+   "p95": 35,
+   "p99": 35,
+   "max": 35,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 40,
+   "perf": {
+    "db_ms_avg": 1,
+    "q_avg": 1,
+    "dupe_avg": 0,
+    "mem_mb_max": 6
+   }
+  },
+  "dash:employmentStatusByCampus": {
+   "n": 1,
+   "rps": 2.16,
+   "avg": 38,
+   "p50": 38,
+   "p95": 38,
+   "p99": 38,
+   "max": 38,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 24,
+   "perf": {
+    "db_ms_avg": 1,
+    "q_avg": 1,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  },
+  "dash:courseWorkAlignment": {
+   "n": 1,
+   "rps": 2.16,
+   "avg": 40,
+   "p50": 40,
+   "p95": 40,
+   "p99": 40,
+   "max": 40,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 24,
+   "perf": {
+    "db_ms_avg": 5,
+    "q_avg": 2,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 4,
+   "p50": 38,
+   "p95": 41
+  }
+ ],
+ "errBodies": [],
+ "upload_window_ms": null
+}

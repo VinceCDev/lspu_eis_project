@@ -60,6 +60,46 @@ class EmploymentReportImporter
 
     private bool $sendCredentialEmails;
 
+    /** Rows written per transaction / multi-row INSERT / checkpoint (config('import.chunk_size')). */
+    private int $batchSize = 1000;
+
+    /** Rows per INSERT statement (see insertInParts()). */
+    private const INSERT_ROWS = 1000;
+
+    /** Upper bound for the human-readable lists kept in the result (errors, skipped rows, warnings). */
+    private const DETAIL_CAP = 100;
+
+    /** Max credential e-mails sent synchronously per import (each is a live SMTP call). */
+    private const EMAIL_CAP = 200;
+
+    /**
+     * Stored for imported accounts that are NOT e-mailed a password. password_verify() can never match it, which is
+     * exactly what the old random-and-discarded password gave (nobody ever learned it) - without the ~50 ms of
+     * bcrypt CPU per row that made a 100k import take ~100 minutes. Those graduates activate via "Forgot password".
+     */
+    private const UNUSABLE_PASSWORD = '!';
+
+    /** @var array<int, array<string,mixed>> rows waiting for the next multi-row write */
+    private array $batch = [];
+
+    /** @var array<string,true> e-mails already queued in this run (the DB can't see them until the batch flushes) */
+    private array $seenEmails = [];
+
+    private int $emailQuota = self::EMAIL_CAP;
+
+    /** @var array<string,true> warning texts already recorded (one per distinct message) */
+    private array $warnSeen = [];
+
+    /**
+     * Queue-job support. $resume = the state saved by the last checkpoint {sheet,row,done,email_quota,result}: sheets before
+     * it are skipped and the current sheet continues after `row`. $checkpoint runs INSIDE each chunk's write transaction, so
+     * the chunk and its resume point commit (or roll back) together. It may throw ImportAborted (lease lost / cancelled).
+     */
+    private ?array $resume = null;
+    private $checkpoint = null;
+    /** @var array{0:int,1:int} [sheet index, row number] of the row being handled - everything up to it is in the batch/DB */
+    private array $cursor = [0, 0];
+
     /** Called with ['phase','done','total','imported'] as rows are processed — the controller streams these to the browser. */
     private $onProgress = null;
     private int $progressTotal = 0;
@@ -83,6 +123,9 @@ class EmploymentReportImporter
     public function __construct()
     {
         $this->sendCredentialEmails = (new SiteSetting())->newAccountEmailEnabled();
+        if (function_exists('config')) {
+            $this->batchSize = max(50, min(10000, (int) config('import.chunk_size', 1000)));
+        }
 
         foreach ((require dirname(__DIR__).'/Config/import_codes.php')['program'] as $code => $name) {
             $this->programMap[$this->normCode($code)] = $name;
@@ -99,12 +142,23 @@ class EmploymentReportImporter
 
     /**
      * @param  callable|null  $onProgress  fn(array{phase:string,done:int,total:int,imported:int}): void
+     * @param  string|null  $clientExtension  original upload extension (PHP temp files have none)
      */
-    public function import(string $path, ?int $campusId, ?int $year, ?callable $onProgress = null): array
+    public function import(string $path, ?int $campusId, ?int $year, ?callable $onProgress = null, ?string $clientExtension = null, ?array $resume = null, ?callable $checkpoint = null): array
     {
         $this->onProgress = $onProgress;
+        $this->checkpoint = $checkpoint;
+        if ($resume !== null && isset($resume['result'])) {
+            $this->resume = $resume;
+            $this->result = $resume['result'] + $this->result;
+            $this->progressDone = (int) ($resume['done'] ?? 0);
+            $this->emailQuota = (int) ($resume['email_quota'] ?? $this->emailQuota);
+            foreach ($this->result['warnings'] as $w) {
+                $this->warnSeen[$w] = true;
+            }
+        }
 
-        return $this->run($path, $campusId, $year, false);
+        return $this->run($path, $campusId, $year, false, $clientExtension);
     }
 
     private function publishProgress(string $phase, bool $force = false): void
@@ -126,81 +180,149 @@ class EmploymentReportImporter
     }
 
     /** Parse + map every row but write nothing (testing / pre-import preview). */
-    public function preview(string $path, ?int $campusId = null, ?int $year = null): array
+    public function preview(string $path, ?int $campusId = null, ?int $year = null, ?string $clientExtension = null): array
     {
-        return $this->run($path, $campusId, $year, true);
+        return $this->run($path, $campusId, $year, true, $clientExtension);
     }
 
-    private function run(string $path, ?int $campusId, ?int $year, bool $dryRun): array
+    private function run(string $path, ?int $campusId, ?int $year, bool $dryRun, ?string $clientExtension = null): array
     {
-        // Large tracer workbooks (20+ sheets) are heavy to parse.
         @ini_set('memory_limit', '1024M');
         if (function_exists('set_time_limit')) {
             @set_time_limit(600);
         }
 
-        // Keep number formats (so date cells read as "July 5, 2023" etc.),
-        // but skip charts to save memory. rangeToArray below is what makes
-        // this fast; per-cell reads were the bottleneck.
         $this->publishProgress('reading', true);
 
-        $reader = IOFactory::createReaderForFile($path);
-        $reader->setIncludeCharts(false);
-        $book = $reader->load($path);
-
-        // First pass: read every sheet's grid + header once, and total up the
-        // data rows so the progress bar has a real denominator.
-        $pending = [];
-        foreach ($book->getAllSheets() as $sheet) {
-            $title = $sheet->getTitle();
-            $rows = $this->sheetGrid($sheet);
-            $map = $this->findHeaderMap($rows);
-
-            if ($map === null) {
-                $this->result['sheets'][$title] = 'no graduate header — skipped';
-
-                continue;
+        // .xlsx / .csv stream row by row in constant memory (a 100k-row workbook used to need >1 GB in PhpSpreadsheet).
+        // Legacy .xls still goes through PhpSpreadsheet.
+        $sheets = [];
+        $legacyBook = null;
+        if (SpreadsheetRowStream::supports($path) || in_array(strtolower((string) $clientExtension), ['xlsx', 'csv'], true)) {
+            $stream = SpreadsheetRowStream::open($path, $clientExtension);
+            foreach ($stream->sheets() as $sh) {
+                $ref = $sh['ref'];
+                $sheets[] = ['name' => $sh['name'], 'rows' => $sh['rows'], 'open' => static fn () => $stream->rows($ref)];
             }
-            $dataRows = max(0, count($rows) - $map['_data_from']);
-            $this->progressTotal += $dataRows;
-            $pending[] = [$title, $rows, $map];
+        } else {
+            $reader = IOFactory::createReaderForFile($path);
+            $reader->setIncludeCharts(false);
+            $legacyBook = $reader->load($path);
+            foreach ($legacyBook->getAllSheets() as $sheet) {
+                $grid = $this->sheetGrid($sheet);
+                $sheets[] = ['name' => $sheet->getTitle(), 'rows' => count($grid), 'open' => static fn () => $grid];
+            }
+        }
+
+        // Progress denominator = estimated rows across sheets (sheet <dimension>); corrected to exact at the end.
+        foreach ($sheets as $sh) {
+            $this->progressTotal += $sh['rows'];
         }
         $this->publishProgress('importing', true);
 
-        // Second pass: process rows, ticking progress as we go.
-        foreach ($pending as [$title, $rows, $map]) {
-            $count = 0;
-            foreach ($rows as $rowNo => $cells) {
-                if ($rowNo <= $map['_data_from']) {
-                    continue;
-                }
-                $this->progressDone++;
-                $this->publishProgress('importing');
-
-                $rec = $this->readRecord($cells, $map);
-                if (!$this->isGraduate($rec)) {
-                    continue;
-                }
-                $count++;
-                $this->result['graduate_rows']++;
-                try {
-                    $this->importRecord("{$title}!{$rowNo}", $rec, $campusId, $year, $dryRun);
-                } catch (\Throwable $e) {
-                    $this->result['skipped']++;
-                    $this->result['errors'][] = "{$title}!{$rowNo}: ".$e->getMessage();
-                }
+        $resumeSheet = $this->resume['sheet'] ?? -1;
+        foreach ($sheets as $idx => $sh) {
+            if ($idx < $resumeSheet) {
+                continue;   // finished before the checkpoint
             }
-            $this->result['sheets'][$title] = "{$count} graduate rows";
+            $this->processSheet($idx, $sh['name'], ($sh['open'])(), $campusId, $year, $dryRun);
         }
+        $this->flushBatch();
+        unset($legacyBook);
+
+        $this->progressTotal = max($this->progressTotal, $this->progressDone);
         $this->progressDone = $this->progressTotal;
         $this->publishProgress('done', true);
 
         $this->result['errors'] = array_slice($this->result['errors'], 0, 100);
         $this->result['warnings'] = array_slice(array_values(array_unique($this->result['warnings'])), 0, 100);
-        $this->result['skipped_details'] = array_slice($this->result['skipped_details'], 0, 100);
+        $this->result['skipped_details'] = array_slice($this->result['skipped_details'], 0, self::DETAIL_CAP);
         $this->result['samples'] = array_slice($this->result['samples'], 0, 25);
 
         return $this->result;
+    }
+
+    /**
+     * Finds the header in the first rows, then streams the rest. The header scan needs random access to ~45 rows only.
+     *
+     * @param  iterable<int, string[]>  $rows  1-based row number => cells
+     */
+    private function processSheet(int $sheetIdx, string $title, iterable $rows, ?int $campusId, ?int $year, bool $dryRun): void
+    {
+        $resumeRow = ($this->resume !== null && ($this->resume['sheet'] ?? -1) === $sheetIdx) ? (int) ($this->resume['row'] ?? 0) : 0;
+        $gen = (static function () use ($rows) {
+            yield from $rows;
+        })();
+
+        $buffer = [];
+        while ($gen->valid() && $gen->key() <= 45) {
+            $buffer[$gen->key()] = $gen->current();
+            $gen->next();
+        }
+        $last = $buffer === [] ? 0 : max(array_keys($buffer));
+        for ($i = 1; $i <= $last; ++$i) {
+            $buffer[$i] ??= [];   // blank rows exist in the old grid too; the header heuristics look one row ahead
+        }
+        ksort($buffer);
+
+        $map = $this->findHeaderMap($buffer);
+        if ($map === null) {
+            $this->result['sheets'][$title] = 'no graduate header — skipped';
+
+            return;
+        }
+
+        $count = 0;
+        $handle = function (int $rowNo, array $cells) use ($sheetIdx, $resumeRow, $map, $title, $campusId, $year, $dryRun, &$count): void {
+            if ($rowNo <= $map['_data_from'] || $rowNo <= $resumeRow) {
+                return;   // header, or already imported before the checkpoint (progressDone was restored from it)
+            }
+            $this->cursor = [$sheetIdx, $rowNo];
+            $this->progressDone++;
+            $this->publishProgress('importing');
+
+            $rec = $this->readRecord($cells, $map);
+            if (!$this->isGraduate($rec)) {
+                return;
+            }
+            $count++;
+            $this->result['graduate_rows']++;
+            try {
+                $this->importRecord("{$title}!{$rowNo}", $rec, $campusId, $year, $dryRun);
+            } catch (\Throwable $e) {
+                if ($e instanceof ImportAborted) {
+                    throw $e;
+                }
+                $this->result['skipped']++;
+                $this->note('errors', "{$title}!{$rowNo}: ".$e->getMessage());
+            }
+        };
+
+        foreach ($buffer as $rowNo => $cells) {
+            $handle($rowNo, $cells);
+        }
+        unset($buffer);
+        while ($gen->valid()) {
+            $handle($gen->key(), $gen->current());
+            $gen->next();
+        }
+        $this->result['sheets'][$title] = $resumeRow > 0 ? "{$count} graduate rows (after resume)" : "{$count} graduate rows";
+    }
+
+    /** Appends to a capped human-readable list; the matching counters keep counting past the cap. */
+    private function note(string $list, string $text): void
+    {
+        if (count($this->result[$list]) < self::DETAIL_CAP) {
+            $this->result[$list][] = $text;
+        }
+    }
+
+    private function warn(string $text): void
+    {
+        if (!isset($this->warnSeen[$text]) && count($this->result['warnings']) < self::DETAIL_CAP) {
+            $this->warnSeen[$text] = true;
+            $this->result['warnings'][] = $text;
+        }
     }
 
     /* ------------------------------------------------------------------ *
@@ -381,7 +503,7 @@ class EmploymentReportImporter
 
         [$course, $college, $known] = $this->resolveProgram($rec['program'] ?? '');
         if (!$known && ($rec['program'] ?? '') !== '') {
-            $this->result['warnings'][] = "Unknown program \"{$rec['program']}\" — kept as-is, college blank.";
+            $this->warn("Unknown program \"{$rec['program']}\" — kept as-is, college blank.");
         }
 
         $email = mb_strtolower(trim($rec['email'] ?? ''));
@@ -390,11 +512,12 @@ class EmploymentReportImporter
             $email = $this->placeholderEmail($firstName, $lastName, $gradYear, $ref);
             $placeholder = true;
         }
-        if ($this->emailExists($email)) {
+        if (isset($this->seenEmails[$email]) || ($dryRun && $this->emailExists($email))) {
             $this->skip($ref, "{$lastName}, {$firstName}", "email already registered ({$email})");
 
             return;
         }
+        $this->seenEmails[$email] = true;   // real-import existence check happens once per batch in flushBatch()
 
         [$company, $position] = $this->splitCompanyPosition($rec['company_pos'] ?? '');
         $statusAfter = trim($rec['status_after'] ?? '');
@@ -434,7 +557,6 @@ class EmploymentReportImporter
             return;
         }
 
-        $plainPassword = bin2hex(random_bytes(5));
         $descParts = array_filter([
             ($rec['industry'] ?? '') !== '' ? "Industry: {$rec['industry']}" : null,
             ($rec['relevance'] ?? '') !== '' ? "Relevance: {$rec['relevance']}" : null,
@@ -444,21 +566,22 @@ class EmploymentReportImporter
             'Imported from Data on Employment report.',
         ]);
 
-        DB::transaction(function () use (
-            $email, $placeholder, $plainPassword, $firstName, $middleName, $lastName, $birthdate, $contact,
-            $gender, $civilStatus, $city, $province, $gradYear, $college, $course, $campusId,
-            $company, $position, $expStart, $gradDate, $statusAfter, $sector, $location, $descParts, $wantExperience
-        ): void {
-            $userId = DB::table('user')->insertGetId([
+        // Bulk-email safety valve (unchanged): honour the "New Account Emails" setting, cap at EMAIL_CAP.
+        $emailable = !$placeholder && $this->sendCredentialEmails && $this->emailQuota > 0;
+        if ($emailable) {
+            --$this->emailQuota;
+        }
+        $plainPassword = $emailable ? bin2hex(random_bytes(5)) : null;
+
+        $this->batch[] = [
+            'ref' => $ref, 'email' => $email, 'placeholder' => $placeholder, 'plain' => $plainPassword,
+            'user' => [
                 'email' => $email,
-                'password' => password_hash($plainPassword, PASSWORD_DEFAULT),
+                'password' => $plainPassword !== null ? password_hash($plainPassword, PASSWORD_DEFAULT) : self::UNUSABLE_PASSWORD,
                 'user_role' => 'alumni',
                 'status' => $placeholder ? 'Inactive' : 'Active',
-                'created_at' => now(),
-            ]);
-
-            $alumniId = DB::table('alumni')->insertGetId([
-                'user_id' => $userId,
+            ],
+            'alumni' => [
                 'first_name' => $firstName,
                 'middle_name' => $middleName !== '' ? $middleName : null,
                 'last_name' => $lastName,
@@ -473,72 +596,199 @@ class EmploymentReportImporter
                 'course' => $course,
                 'campus_id' => $campusId,
                 'verification_document' => '',
-                'created_at' => now(),
-            ]);
+            ],
+            'education' => $course !== '' ? [
+                'degree' => $course,
+                'school' => 'Laguna State Polytechnic University',
+                'start_date' => null,
+                'end_date' => $gradDate,
+                'current' => 0,
+            ] : null,
+            'experience' => $wantExperience ? [
+                'title' => $position !== '' ? $position : 'Not specified',
+                'company' => $company,
+                'start_date' => $expStart,
+                'end_date' => null,
+                'current' => 1,
+                'description' => implode("\n", $descParts),
+                'location_of_work' => $location,
+                'employment_status' => $statusAfter !== '' ? $statusAfter : null,
+                'employment_sector' => $sector,
+            ] : null,
+            'name' => trim("{$firstName} {$lastName}"),
+        ];
 
-            if ($course !== '') {
-                DB::table('alumni_education')->insert([
-                    'alumni_id' => $alumniId,
-                    'degree' => $course,
-                    'school' => 'Laguna State Polytechnic University',
-                    'start_date' => null,
-                    'end_date' => $gradDate,
-                    'current' => 0,
-                    'created_at' => now(),
-                ]);
+        if (count($this->batch) >= $this->batchSize) {
+            $this->flushBatch();
+        }
+    }
+
+    /**
+     * Writes the queued graduates: ONE existence query, then multi-row INSERTs inside ONE short transaction
+     * (was: 1 SELECT + 1 transaction + 3-4 single-row INSERTs + 1 bcrypt per graduate).
+     *
+     * Queue-job safety: the resume checkpoint is written INSIDE that same transaction, so a chunk and the pointer to the next
+     * chunk commit atomically - a crash or a lost lease can neither lose nor repeat a chunk. Should a retry ever re-read rows
+     * that ARE committed (e.g. a fallback path), the existence check above skips them, and `user.email` is UNIQUE, so nothing
+     * is imported twice. If a batch fails (e.g. a concurrent import took one of the e-mails) it is retried row by row so
+     * only the bad row is skipped.
+     */
+    private function flushBatch(): void
+    {
+        if ($this->batch === []) {
+            return;
+        }
+        $batch = $this->batch;
+        $this->batch = [];
+
+        $existing = [];
+        foreach (array_chunk(array_column($batch, 'email'), 1000) as $emails) {
+            foreach (DB::table('user')->whereIn('email', $emails)->pluck('email') as $e) {
+                $existing[mb_strtolower($e)] = true;
             }
-
-            if ($wantExperience) {
-                DB::table('alumni_experience')->insert([
-                    'alumni_id' => $alumniId,
-                    'title' => $position !== '' ? $position : 'Not specified',
-                    'company' => $company,
-                    'start_date' => $expStart,
-                    'end_date' => null,
-                    'current' => 1,
-                    'description' => implode("\n", $descParts),
-                    'location_of_work' => $location,
-                    'employment_status' => $statusAfter !== '' ? $statusAfter : null,
-                    'employment_sector' => $sector,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-                $this->result['experience_rows']++;
+        }
+        $todo = [];
+        foreach ($batch as $row) {
+            if (isset($existing[$row['email']])) {
+                $this->skip($row['ref'], $row['name'], "email already registered ({$row['email']})");
+            } else {
+                $todo[] = $row;
             }
-        });
+        }
+        if ($todo === []) {
+            $this->saveCheckpoint();
 
-        $this->result['imported']++;
-        if ($placeholder) {
-            $this->result['placeholder_emails']++;
+            return;
         }
 
-        // Bulk-email safety valve: honour the "New Account Emails" setting,
-        // but stop after 200 so a large import can't time out mid-run
-        // sending hundreds of SMTP messages synchronously.
-        if (!$placeholder && $this->sendCredentialEmails && $this->result['emailed'] < 200
-            && filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            try {
-                $name = trim("{$firstName} {$lastName}");
-                (new MailService())->send(
-                    $email,
-                    $name,
-                    'Your LSPU EIS Alumni Account',
-                    MailService::wrap(
-                        'Welcome, '.htmlspecialchars($name).'!',
-                        '<p>Your alumni account has been created by the administrator and is already active.</p>'
-                            .'<div style="background:#f1f5f9;border-radius:8px;padding:16px 18px;margin:16px 0;">'
-                            ."<p style=\"margin:0 0 6px;\"><strong>Email:</strong> {$email}</p>"
-                            ."<p style=\"margin:0;\"><strong>Password:</strong> {$plainPassword}</p>"
-                            .'</div>'
-                            .'<p>For security, please change your password after logging in.</p>',
-                        'Login to LSPU EIS',
-                        config('app.url').'/login'
-                    )
-                );
-                $this->result['emailed']++;
-            } catch (\Throwable $e) {
-                $this->result['warnings'][] = "Could not email {$email}: ".$e->getMessage();
+        $delta = [
+            'imported' => count($todo),
+            'placeholder_emails' => count(array_filter($todo, static fn ($r) => $r['placeholder'])),
+            'experience_rows' => count(array_filter($todo, static fn ($r) => $r['experience'] !== null)),
+        ];
+
+        $fellBack = false;
+        try {
+            DB::transaction(function () use ($todo, $delta) {
+                $this->writeRows($todo);
+                $this->saveCheckpoint($delta);
+            }, 3);   // 3 attempts: a deadlock against a concurrent import is retried instead of failing the chunk
+            $written = $todo;
+        } catch (ImportAborted $e) {
+            throw $e;
+        } catch (\Throwable) {
+            $fellBack = true;
+            $written = [];
+            foreach ($todo as $row) {
+                try {
+                    DB::transaction(fn () => $this->writeRows([$row]));
+                    $written[] = $row;
+                } catch (\Throwable $e) {
+                    $this->result['skipped']++;
+                    $this->note('errors', "{$row['ref']}: ".$e->getMessage());
+                }
             }
+        }
+
+        foreach ($written as $row) {
+            $this->result['imported']++;
+            if ($row['placeholder']) {
+                $this->result['placeholder_emails']++;
+            }
+            if ($row['experience'] !== null) {
+                $this->result['experience_rows']++;
+            }
+        }
+        if ($fellBack) {
+            $this->saveCheckpoint();
+        }
+        foreach ($written as $row) {
+            if ($row['plain'] !== null) {
+                $this->sendCredentialEmail($row['email'], $row['name'], $row['plain']);
+            }
+        }
+    }
+
+    /** Hands the resume point + counters to the queue job (inside the chunk's transaction). $delta = counters not yet applied. */
+    private function saveCheckpoint(array $delta = []): void
+    {
+        if ($this->checkpoint === null) {
+            return;
+        }
+        $result = $this->result;
+        foreach ($delta as $key => $n) {
+            $result[$key] += $n;
+        }
+        ($this->checkpoint)([
+            'sheet' => $this->cursor[0],
+            'row' => $this->cursor[1],
+            'done' => $this->progressDone,
+            'total' => $this->progressTotal,
+            'email_quota' => $this->emailQuota,
+            'result' => $result,
+        ]);
+    }
+
+    private function writeRows(array $rows): void
+    {
+        $now = now();
+        $stamp = static fn (array $r): array => $r + ['created_at' => $now];
+
+        $this->insertInParts('user', array_map(static fn ($r) => $stamp($r['user']), $rows));
+        $userIds = DB::table('user')->whereIn('email', array_column($rows, 'email'))->pluck('user_id', 'email');
+
+        $this->insertInParts('alumni', array_map(fn ($r) => $stamp($r['alumni'] + ['user_id' => $userIds[$r['email']]]), $rows));
+        $alumniIds = DB::table('alumni')->whereIn('user_id', $userIds->values()->all())->pluck('alumni_id', 'user_id');
+
+        $edu = [];
+        $exp = [];
+        foreach ($rows as $r) {
+            $aid = $alumniIds[$userIds[$r['email']]];
+            if ($r['education'] !== null) {
+                $edu[] = $stamp($r['education'] + ['alumni_id' => $aid]);
+            }
+            if ($r['experience'] !== null) {
+                $exp[] = $r['experience'] + ['alumni_id' => $aid, 'created_at' => $now, 'updated_at' => $now];
+            }
+        }
+        $this->insertInParts('alumni_education', $edu);
+        $this->insertInParts('alumni_experience', $exp);
+    }
+
+    /**
+     * Multi-row INSERTs of at most INSERT_ROWS rows. PDO allows 65,535 bound parameters per statement: `alumni` has 16 columns, so
+     * one 5,000-row statement (80,000 parameters) fails - measured: a 5,000-row chunk made EVERY chunk fall back to the row-by-row
+     * path and the 100k import did not finish in 600 s. Sub-batching makes any chunk size safe.
+     */
+    private function insertInParts(string $table, array $rows): void
+    {
+        foreach (array_chunk($rows, self::INSERT_ROWS) as $part) {
+            DB::table($table)->insert($part);
+        }
+    }
+
+    private function sendCredentialEmail(string $email, string $name, string $plainPassword): void
+    {
+        try {
+            (new MailService())->send(
+                $email,
+                $name,
+                'Your LSPU EIS Alumni Account',
+                MailService::wrap(
+                    'Welcome, '.htmlspecialchars($name).'!',
+                    '<p>Your alumni account has been created by the administrator and is already active.</p>'
+                        .'<div style="background:#f1f5f9;border-radius:8px;padding:16px 18px;margin:16px 0;">'
+                        ."<p style=\"margin:0 0 6px;\"><strong>Email:</strong> {$email}</p>"
+                        ."<p style=\"margin:0;\"><strong>Password:</strong> {$plainPassword}</p>"
+                        .'</div>'
+                        .'<p>For security, please change your password after logging in.</p>',
+                    'Login to LSPU EIS',
+                    config('app.url').'/login'
+                )
+            );
+            $this->result['emailed']++;
+        } catch (\Throwable $e) {
+            $this->warn("Could not email {$email}: ".$e->getMessage());
         }
     }
 
@@ -812,6 +1062,6 @@ class EmploymentReportImporter
     private function skip(string $ref, string $who, string $reason): void
     {
         $this->result['skipped']++;
-        $this->result['skipped_details'][] = "{$ref} ({$who}): {$reason}";
+        $this->note('skipped_details', "{$ref} ({$who}): {$reason}");
     }
 }

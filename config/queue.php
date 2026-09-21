@@ -38,9 +38,21 @@ return [
         'database' => [
             'driver' => 'database',
             'connection' => env('DB_QUEUE_CONNECTION'),
-            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            // NOT `jobs`: that table holds this app's job postings. Laravel's queue rows live in `queue_jobs`.
+            'table' => env('DB_QUEUE_TABLE', 'queue_jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 900),
+            'after_commit' => false,
+        ],
+
+        // Bulk imports (queue "imports"). Same table; a separate connection only because retry_after is per connection:
+        // it must exceed config('import.job_timeout') or a still-running import would be handed to a second worker.
+        'database_long' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'queue_jobs'),
+            'queue' => 'imports',
+            'retry_after' => (int) env('IMPORT_QUEUE_RETRY_AFTER', 7200),
             'after_commit' => false,
         ],
 

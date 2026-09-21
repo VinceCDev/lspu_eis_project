@@ -1,0 +1,87 @@
+{
+ "name": "L500k_alumni_list_c1",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 29,
+ "overall": {
+  "n": 2,
+  "rps": 0.07,
+  "avg": 14148,
+  "p50": 44,
+  "p95": 28252,
+  "p99": 28252,
+  "max": 28252,
+  "err_5xx": 1,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 1,
+  "kb": 36
+ },
+ "byLabel": {
+  "alumni:page": {
+   "n": 1,
+   "rps": 0.03,
+   "avg": 44,
+   "p50": 44,
+   "p95": 44,
+   "p99": 44,
+   "max": 44,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 72,
+   "perf": {
+    "db_ms_avg": 0,
+    "q_avg": 0,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  },
+  "alumni:list(all)": {
+   "n": 1,
+   "rps": 0.03,
+   "avg": 28252,
+   "p50": 28252,
+   "p95": 28252,
+   "p99": 28252,
+   "max": 28252,
+   "err_5xx": 1,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 0,
+   "kb": 0,
+   "perf": {
+    "db_ms_avg": 2387,
+    "q_avg": 1,
+    "dupe_avg": 0,
+    "mem_mb_max": 320
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 2,
+   "p50": 44,
+   "p95": 28252
+  }
+ ],
+ "errBodies": [
+  {
+   "label": "alumni:list(all)",
+   "path": "/admin_alumni?action=list",
+   "status": 500,
+   "body": "{ \"message\": \"Server Error\" }"
+  }
+ ]
+}

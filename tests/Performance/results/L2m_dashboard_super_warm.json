@@ -1,0 +1,134 @@
+{
+ "name": "L2m_dashboard_super_warm",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 129,
+ "overall": {
+  "n": 4,
+  "rps": 0.03,
+  "avg": 35409,
+  "p50": 102,
+  "p95": 128646,
+  "p99": 128646,
+  "max": 128646,
+  "err_5xx": 1,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 3,
+  "kb": 47
+ },
+ "byLabel": {
+  "dash:page": {
+   "n": 1,
+   "rps": 0.01,
+   "avg": 91,
+   "p50": 91,
+   "p95": 91,
+   "p99": 91,
+   "max": 91,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 36,
+   "perf": {
+    "db_ms_avg": 0,
+    "q_avg": 0,
+    "dupe_avg": 0,
+    "mem_mb_max": 360
+   }
+  },
+  "dash:employmentStatusByCampus": {
+   "n": 1,
+   "rps": 0.01,
+   "avg": 102,
+   "p50": 102,
+   "p95": 102,
+   "p99": 102,
+   "max": 102,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 17,
+   "perf": {
+    "db_ms_avg": 2,
+    "q_avg": 1,
+    "dupe_avg": 0,
+    "mem_mb_max": 6
+   }
+  },
+  "dash:courseWorkAlignment": {
+   "n": 1,
+   "rps": 0.01,
+   "avg": 12796,
+   "p50": 12796,
+   "p95": 12796,
+   "p99": 12796,
+   "max": 12796,
+   "err_5xx": 1,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 0,
+   "kb": 0,
+   "perf": {
+    "db_ms_avg": 0,
+    "q_avg": 0,
+    "dupe_avg": 0,
+    "mem_mb_max": 0
+   }
+  },
+  "dash:stats": {
+   "n": 1,
+   "rps": 0.01,
+   "avg": 128646,
+   "p50": 128646,
+   "p95": 128646,
+   "p99": 128646,
+   "max": 128646,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 135,
+   "perf": {
+    "db_ms_avg": 128558,
+    "q_avg": 17,
+    "dupe_avg": 0,
+    "mem_mb_max": 20
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 4,
+   "p50": 102,
+   "p95": 128646
+  }
+ ],
+ "errBodies": [
+  {
+   "label": "dash:courseWorkAlignment",
+   "path": "/superadmin_dashboard?action=courseWorkAlignment",
+   "status": 500,
+   "body": ""
+  }
+ ],
+ "upload_window_ms": null
+}

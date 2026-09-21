@@ -228,6 +228,7 @@ class Account
             'INSERT INTO alumni (user_id, first_name, middle_name, last_name, profile_pic, verification_document, birthdate, contact, gender, civil_status, city, province, year_graduated, college, course) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [$userId, $firstName, $middleName, $lastName, $profilePic, '', null, '', '', '', '', '', null, '', '']
         );
+        \App\Services\ReportingSummary::markDirty(null);   // no campus yet
     }
 
     public function updateAdmin(int $userId, string $email, string $firstName, string $middleName, string $lastName, string $status, ?string $profilePic, ?int $campusId = null): void
@@ -314,6 +315,8 @@ class Account
             return false;
         }
 
+        $alumniCampus = $role === 'alumni' ? DB::table('alumni')->where('user_id', $userId)->first(['campus_id']) : null;
+
         try {
             DB::transaction(function () use ($userId, $table) {
                 // saved_jobs.user_id -> user.user_id is RESTRICT, not CASCADE
@@ -324,6 +327,9 @@ class Account
                 $this->runDelete("DELETE FROM {$table} WHERE user_id = ?", [$userId]);
                 $this->runDelete('DELETE FROM user WHERE user_id = ?', [$userId]);
             });
+            if ($alumniCampus !== null) {
+                \App\Services\ReportingSummary::markDirty($alumniCampus->campus_id !== null ? (int) $alumniCampus->campus_id : null);
+            }
 
             return true;
         } catch (\Throwable $e) {

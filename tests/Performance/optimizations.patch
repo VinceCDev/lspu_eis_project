@@ -1,0 +1,1418 @@
+diff --git a/app/Http/Controllers/Admin/AlumniController.php b/app/Http/Controllers/Admin/AlumniController.php
+index ad54d55..1466f1d 100644
+--- a/app/Http/Controllers/Admin/AlumniController.php
++++ b/app/Http/Controllers/Admin/AlumniController.php
+@@ -10,6 +10,7 @@
+ use App\Services\Auth;
+ use App\Services\EmploymentReportImporter;
+ use App\Services\MailService;
++use App\Support\HeavyCache;
+ use Illuminate\Http\JsonResponse;
+ use Illuminate\Http\Request;
+ use Illuminate\Support\Facades\Session;
+@@ -37,8 +38,35 @@ public function pending()
+         ]);
+     }
+ 
++    /** Largest alumni set the unpaginated list()/pendingList() endpoints will build (see guardUnboundedList()). */
++    private const MAX_UNPAGINATED = 25000;
++
++    /**
++     * list() ships every alumnus of the campus (plus skills/education/experience/resume) as ONE JSON document, built in PHP
++     * memory. Measured: 28 MB at 30k rows, HTTP 500 (memory) after 28 s at 150k and 122 s at 300k, and the query it runs
++     * competes with every other user. Refuse early with an actionable message instead; paginatedList() is the scalable path.
++     */
++    private function guardUnboundedList(string $status): ?JsonResponse
++    {
++        $campusId = Auth::role() === 'superadmin' ? null : Auth::campusId();
++        $total = (new Alumni())->countByStatus($status, $campusId);
++        if ($total > self::MAX_UNPAGINATED) {
++            return response()->json([
++                'success' => false,
++                'message' => 'There are '.number_format($total).' alumni records - too many to load at once. Use search/filters (paged list).',
++                'total' => $total,
++            ], 413);
++        }
++
++        return null;
++    }
++
+     public function list(): JsonResponse
+     {
++        if ($blocked = $this->guardUnboundedList('Active')) {
++            return $blocked;
++        }
++
+         $alumniModel = new Alumni();
+         $alumni = Auth::role() === 'superadmin'
+             ? $alumniModel->allByStatus('Active')
+@@ -295,7 +323,7 @@ public function importEmploymentReport(Request $request)
+         // frontend reads xhr.responseText incrementally, so the % moves in
+         // real time on a single connection (no polling, works even on a
+         // single-process dev server).
+-        return response()->stream(function () use ($tmp, $campusId, $year, $actorId, $actorEmail, $actorRole) {
++        return response()->stream(function () use ($tmp, $campusId, $year, $actorId, $actorEmail, $actorRole, $ext) {
+             while (ob_get_level() > 0) {
+                 @ob_end_flush();
+             }
+@@ -313,9 +341,14 @@ public function importEmploymentReport(Request $request)
+                     $year,
+                     static function (array $p) use ($emit): void {
+                         $emit(['phase' => $p['phase'], 'done' => $p['done'], 'total' => $p['total']]);
+-                    }
++                    },
++                    $ext
+                 );
+ 
++                // New graduates change every dashboard/report figure: flag the cached payloads stale (they keep being
++                // served instantly while one refresh per payload runs) instead of showing old numbers for up to 10 min.
++                HeavyCache::markStale();
++
+                 (new AuditLog())->log(
+                     $actorId,
+                     $actorEmail,
+diff --git a/app/Http/Controllers/Admin/DashboardController.php b/app/Http/Controllers/Admin/DashboardController.php
+index c37eeb1..31ae50e 100644
+--- a/app/Http/Controllers/Admin/DashboardController.php
++++ b/app/Http/Controllers/Admin/DashboardController.php
+@@ -8,6 +8,7 @@
+ use App\Models\GeocodeCache;
+ use App\Services\AlignmentService;
+ use App\Services\Auth;
++use App\Support\HeavyCache;
+ use Illuminate\Http\JsonResponse;
+ use Illuminate\Http\Request;
+ use Illuminate\Support\Facades\Cache;
+@@ -36,9 +37,10 @@ public function stats(): JsonResponse
+     {
+         $campusId = Auth::role() === 'superadmin' ? null : Auth::campusId();
+ 
+-        $payload = Cache::remember(
++        $payload = HeavyCache::remember(
+             'dashboard_stats:'.($campusId ?? 'all'),
+-            120,
++            600,
++            21600,
+             function () use ($campusId) {
+                 $stats = new DashboardStats($campusId);
+ 
+@@ -68,10 +70,11 @@ public function courseWorkAlignment(): JsonResponse
+         set_time_limit(180);
+ 
+         try {
+-            $alignment = Cache::remember(
++            $alignment = HeavyCache::remember(
+                 'dashboard_course_work_alignment:'.($campusId ?? 'all'),
+                 600,
+-                fn () => (new AlignmentService())->classify((new DashboardStats($campusId))->currentCourseJobTitles())
++                21600,
++                fn () => (new AlignmentService())->classify((new DashboardStats($campusId))->currentCourseJobTitleCounts())
+             );
+ 
+             return response()->json(['success' => true, 'course_work_alignment' => $alignment]);
+@@ -87,7 +90,7 @@ public function employmentStatusByCampus(): JsonResponse
+         $isSuperadmin = Auth::role() === 'superadmin';
+         $cacheKey = 'dashboard_employment_status_by_campus:'.($isSuperadmin ? 'all' : Auth::campusId());
+ 
+-        $data = Cache::remember($cacheKey, 300, function () use ($isSuperadmin) {
++        $data = HeavyCache::remember($cacheKey, 600, 21600, function () use ($isSuperadmin) {
+             // C4: authorised campus list first, then ONE grouped pass for all
+             // of them instead of a 4-query loop per campus.
+             $campuses = $isSuperadmin
+diff --git a/app/Http/Controllers/Admin/ReportController.php b/app/Http/Controllers/Admin/ReportController.php
+index 09f30ba..ee67b10 100644
+--- a/app/Http/Controllers/Admin/ReportController.php
++++ b/app/Http/Controllers/Admin/ReportController.php
+@@ -8,6 +8,7 @@
+ use App\Services\Auth;
+ use App\Services\MailService;
+ use App\Services\ReportService;
++use App\Support\HeavyCache;
+ use Illuminate\Http\JsonResponse;
+ use Illuminate\Http\Request;
+ use Illuminate\Support\Facades\Cache;
+@@ -17,6 +18,9 @@
+ /** Ported from backend/Controllers/Admin/ReportController.php. */
+ class ReportController extends Controller
+ {
++    /** Largest scope the synchronous full export will serve (see fullData()). */
++    private const MAX_EXPORT_ALUMNI = 50000;
++
+     public function index()
+     {
+         return view('admin.reports', [
+@@ -39,9 +43,10 @@ public function summary(Request $request): JsonResponse
+         // Aggregated report figures change only when alumni/experience data
+         // does (imports, edits) — a short TTL keeps the page snappy and stops
+         // concurrent tabs/admins each rebuilding it.
+-        $data = Cache::remember(
++        $data = HeavyCache::remember(
+             $this->reportCacheKey('summary', $campusId, $college, $yearGraduated),
+-            300,
++            600,
++            21600,
+             fn () => (new ReportService(null, null, $campusId, $college, $yearGraduated))->summary()
+         );
+ 
+@@ -54,9 +59,22 @@ public function fullData(Request $request): JsonResponse
+         $college = $request->query('college');
+         $yearGraduated = $this->resolveYearGraduated($request->query('year_graduated'));
+ 
+-        $data = Cache::remember(
++        // fullReportData() returns one row per alumnus (detailed_employment, industry_analysis, ...) built in PHP memory and
++        // serialised as one JSON document. Measured: 36 s then HTTP 500 (memory) at 150k alumni. Refuse instead of
++        // burning a worker + the DB for a minute, and tell the admin how to narrow the export.
++        $inScope = (new Report($campusId, $college, $yearGraduated))->alumniCount();
++        if ($inScope > self::MAX_EXPORT_ALUMNI) {
++            return response()->json([
++                'success' => false,
++                'message' => 'This report covers '.number_format($inScope).' graduates, which is too many to export in one file (limit '
++                    .number_format(self::MAX_EXPORT_ALUMNI).'). Narrow it by campus, college or graduation year and try again.',
++            ], 422);
++        }
++
++        $data = HeavyCache::remember(
+             $this->reportCacheKey('full', $campusId, $college, $yearGraduated),
+-            300,
++            600,
++            21600,
+             fn () => (new ReportService(null, null, $campusId, $college, $yearGraduated))->fullReportData()
+         );
+         $data['campus_name'] = $campusId !== null ? $this->campusName($campusId) : 'All Campuses';
+diff --git a/app/Models/AlignmentCache.php b/app/Models/AlignmentCache.php
+index 1922cb4..24f14f2 100644
+--- a/app/Models/AlignmentCache.php
++++ b/app/Models/AlignmentCache.php
+@@ -37,11 +37,15 @@ public function getMany(array $pairs): array
+         }
+ 
+         $keys = array_values(array_unique(array_map(static fn (array $p) => self::key($p[0], $p[1]), $pairs)));
+-        $placeholders = implode(',', array_fill(0, count($keys), '?'));
+ 
++        // Chunked: one IN() with a placeholder per distinct (course, title) pair breaks past PDO's 65,535-placeholder
++        // limit once imports have introduced enough distinct free-text job titles.
+         $out = [];
+-        foreach ($this->selectAll("SELECT cache_key, label FROM alignment_cache WHERE cache_key IN ({$placeholders})", $keys) as $row) {
+-            $out[$row['cache_key']] = $row['label'];
++        foreach (array_chunk($keys, 5000) as $chunk) {
++            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
++            foreach ($this->selectAll("SELECT cache_key, label FROM alignment_cache WHERE cache_key IN ({$placeholders})", $chunk) as $row) {
++                $out[$row['cache_key']] = $row['label'];
++            }
+         }
+ 
+         return $out;
+diff --git a/app/Models/DashboardStats.php b/app/Models/DashboardStats.php
+index cd74635..d896388 100644
+--- a/app/Models/DashboardStats.php
++++ b/app/Models/DashboardStats.php
+@@ -409,17 +409,12 @@ private function employmentSectorDistribution(): array
+ 
+     private function coursesPerLocation(): array
+     {
++        // One pass: the old code ran this exact join twice (as "graduates" and again as "employed") and the two counts are
++        // identical by construction (both COUNT(DISTINCT alumni_id) over current = 1 rows).
+         $courses = [];
+-        foreach ($this->selectAll('SELECT location_of_work, a.course, COUNT(DISTINCT a.alumni_id) as graduates FROM alumni_experience e JOIN alumni a ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY location_of_work, a.course') as $row) {
++        foreach ($this->selectAll('SELECT location_of_work, a.course, COUNT(DISTINCT a.alumni_id) as n FROM alumni_experience e JOIN alumni a ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY location_of_work, a.course') as $row) {
+             $loc = $row['location_of_work'] ?: '';
+-            $courses[$loc][$row['course']] = ['graduates' => (int) $row['graduates'], 'employed' => 0];
+-        }
+-
+-        foreach ($this->selectAll('SELECT location_of_work, a.course, COUNT(DISTINCT a.alumni_id) as employed FROM alumni_experience e JOIN alumni a ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY location_of_work, a.course') as $row) {
+-            $loc = $row['location_of_work'] ?: '';
+-            if (isset($courses[$loc][$row['course']])) {
+-                $courses[$loc][$row['course']]['employed'] = (int) $row['employed'];
+-            }
++            $courses[$loc][$row['course']] = ['graduates' => (int) $row['n'], 'employed' => (int) $row['n']];
+         }
+ 
+         return $courses;
+@@ -428,21 +423,26 @@ private function coursesPerLocation(): array
+     private function coursesPerSector(): array
+     {
+         $courses = [];
+-        foreach ($this->selectAll('SELECT employment_sector, a.course, COUNT(DISTINCT a.alumni_id) as graduates FROM alumni_experience e JOIN alumni a ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY employment_sector, a.course') as $row) {
+-            $sec = $row['employment_sector'] ?: '';
+-            $courses[$sec][$row['course']] = ['graduates' => (int) $row['graduates'], 'employed' => 0];
+-        }
+-
+-        foreach ($this->selectAll('SELECT employment_sector, a.course, COUNT(DISTINCT a.alumni_id) as employed FROM alumni_experience e JOIN alumni a ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY employment_sector, a.course') as $row) {
++        foreach ($this->selectAll('SELECT employment_sector, a.course, COUNT(DISTINCT a.alumni_id) as n FROM alumni_experience e JOIN alumni a ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY employment_sector, a.course') as $row) {
+             $sec = $row['employment_sector'] ?: '';
+-            if (isset($courses[$sec][$row['course']])) {
+-                $courses[$sec][$row['course']]['employed'] = (int) $row['employed'];
+-            }
++            $courses[$sec][$row['course']] = ['graduates' => (int) $row['n'], 'employed' => (int) $row['n']];
+         }
+ 
+         return $courses;
+     }
+ 
++    /**
++     * (course, job title, count) for currently-employed alumni. Same information as currentCourseJobTitles() but grouped in SQL:
++     * that method returned ONE ROW PER EMPLOYED ALUMNUS into PHP (650k rows / >1 GB at 1M alumni => HTTP 500), while the
++     * number of distinct (course, title) pairs stays in the low thousands however many alumni there are.
++     *
++     * @return array<int, array{course: string, title: string, cnt: int}>
++     */
++    public function currentCourseJobTitleCounts(): array
++    {
++        return $this->selectAll('SELECT a.course, e.title, COUNT(*) AS cnt FROM alumni a JOIN alumni_experience e ON a.alumni_id = e.alumni_id WHERE e.current = 1'.$this->campusClause('a').' GROUP BY a.course, e.title');
++    }
++
+     /** Raw (course, job title) pairs for currently-employed alumni; alignment classification happens in the Service layer. */
+     public function currentCourseJobTitles(): array
+     {
+diff --git a/app/Models/Report.php b/app/Models/Report.php
+index c3e9d5b..1dfdcfe 100644
+--- a/app/Models/Report.php
++++ b/app/Models/Report.php
+@@ -68,6 +68,14 @@ private function campusClause(string $alias, bool $isFirstCondition = false): st
+         return " {$keyword} ".implode(' AND ', $conditions).' ';
+     }
+ 
++    /** Number of alumni in the current campus/college/year scope (index-only COUNT; used to guard unbounded exports). */
++    public function alumniCount(): int
++    {
++        $row = $this->selectOne('SELECT COUNT(*) AS c FROM alumni a'.$this->campusClause('a', true));
++
++        return (int) ($row['c'] ?? 0);
++    }
++
+     public function courseCollegeJobRows(): array
+     {
+         return $this->selectAll("SELECT a.alumni_id, a.course, a.college, e.title as job_title, e.employment_status, e.employment_sector, e.location_of_work
+diff --git a/app/Services/AlignmentService.php b/app/Services/AlignmentService.php
+index 00317a0..f4327b4 100644
+--- a/app/Services/AlignmentService.php
++++ b/app/Services/AlignmentService.php
+@@ -100,7 +100,7 @@ public function classify(array $courseJobPairs): array
+                 ];
+             }
+ 
+-            ++$alignment[$course]['counts'][$this->classifyOne($course, $title)];
++            $alignment[$course]['counts'][$this->classifyOne($course, $title)] += (int) ($row['cnt'] ?? 1);
+         }
+ 
+         foreach ($alignment as &$data) {
+diff --git a/app/Services/EmploymentReportImporter.php b/app/Services/EmploymentReportImporter.php
+index 9a106ab..6c84de2 100644
+--- a/app/Services/EmploymentReportImporter.php
++++ b/app/Services/EmploymentReportImporter.php
+@@ -60,6 +60,27 @@ class EmploymentReportImporter
+ 
+     private bool $sendCredentialEmails;
+ 
++    /** Rows written per transaction / multi-row INSERT. */
++    private const BATCH_SIZE = 500;
++
++    /** Max credential e-mails sent synchronously per import (each is a live SMTP call). */
++    private const EMAIL_CAP = 200;
++
++    /**
++     * Stored for imported accounts that are NOT e-mailed a password. password_verify() can never match it, which is
++     * exactly what the old random-and-discarded password gave (nobody ever learned it) - without the ~50 ms of
++     * bcrypt CPU per row that made a 100k import take ~100 minutes. Those graduates activate via "Forgot password".
++     */
++    private const UNUSABLE_PASSWORD = '!';
++
++    /** @var array<int, array<string,mixed>> rows waiting for the next multi-row write */
++    private array $batch = [];
++
++    /** @var array<string,true> e-mails already queued in this run (the DB can't see them until the batch flushes) */
++    private array $seenEmails = [];
++
++    private int $emailQuota = self::EMAIL_CAP;
++
+     /** Called with ['phase','done','total','imported'] as rows are processed — the controller streams these to the browser. */
+     private $onProgress = null;
+     private int $progressTotal = 0;
+@@ -99,12 +120,13 @@ public function __construct()
+ 
+     /**
+      * @param  callable|null  $onProgress  fn(array{phase:string,done:int,total:int,imported:int}): void
++     * @param  string|null  $clientExtension  original upload extension (PHP temp files have none)
+      */
+-    public function import(string $path, ?int $campusId, ?int $year, ?callable $onProgress = null): array
++    public function import(string $path, ?int $campusId, ?int $year, ?callable $onProgress = null, ?string $clientExtension = null): array
+     {
+         $this->onProgress = $onProgress;
+ 
+-        return $this->run($path, $campusId, $year, false);
++        return $this->run($path, $campusId, $year, false, $clientExtension);
+     }
+ 
+     private function publishProgress(string $phase, bool $force = false): void
+@@ -126,72 +148,53 @@ private function publishProgress(string $phase, bool $force = false): void
+     }
+ 
+     /** Parse + map every row but write nothing (testing / pre-import preview). */
+-    public function preview(string $path, ?int $campusId = null, ?int $year = null): array
++    public function preview(string $path, ?int $campusId = null, ?int $year = null, ?string $clientExtension = null): array
+     {
+-        return $this->run($path, $campusId, $year, true);
++        return $this->run($path, $campusId, $year, true, $clientExtension);
+     }
+ 
+-    private function run(string $path, ?int $campusId, ?int $year, bool $dryRun): array
++    private function run(string $path, ?int $campusId, ?int $year, bool $dryRun, ?string $clientExtension = null): array
+     {
+-        // Large tracer workbooks (20+ sheets) are heavy to parse.
+         @ini_set('memory_limit', '1024M');
+         if (function_exists('set_time_limit')) {
+             @set_time_limit(600);
+         }
+ 
+-        // Keep number formats (so date cells read as "July 5, 2023" etc.),
+-        // but skip charts to save memory. rangeToArray below is what makes
+-        // this fast; per-cell reads were the bottleneck.
+         $this->publishProgress('reading', true);
+ 
+-        $reader = IOFactory::createReaderForFile($path);
+-        $reader->setIncludeCharts(false);
+-        $book = $reader->load($path);
+-
+-        // First pass: read every sheet's grid + header once, and total up the
+-        // data rows so the progress bar has a real denominator.
+-        $pending = [];
+-        foreach ($book->getAllSheets() as $sheet) {
+-            $title = $sheet->getTitle();
+-            $rows = $this->sheetGrid($sheet);
+-            $map = $this->findHeaderMap($rows);
+-
+-            if ($map === null) {
+-                $this->result['sheets'][$title] = 'no graduate header — skipped';
+-
+-                continue;
++        // .xlsx / .csv stream row by row in constant memory (a 100k-row workbook used to need >1 GB in PhpSpreadsheet).
++        // Legacy .xls still goes through PhpSpreadsheet.
++        $sheets = [];
++        $legacyBook = null;
++        if (SpreadsheetRowStream::supports($path) || in_array(strtolower((string) $clientExtension), ['xlsx', 'csv'], true)) {
++            $stream = SpreadsheetRowStream::open($path, $clientExtension);
++            foreach ($stream->sheets() as $sh) {
++                $ref = $sh['ref'];
++                $sheets[] = ['name' => $sh['name'], 'rows' => $sh['rows'], 'open' => static fn () => $stream->rows($ref)];
++            }
++        } else {
++            $reader = IOFactory::createReaderForFile($path);
++            $reader->setIncludeCharts(false);
++            $legacyBook = $reader->load($path);
++            foreach ($legacyBook->getAllSheets() as $sheet) {
++                $grid = $this->sheetGrid($sheet);
++                $sheets[] = ['name' => $sheet->getTitle(), 'rows' => count($grid), 'open' => static fn () => $grid];
+             }
+-            $dataRows = max(0, count($rows) - $map['_data_from']);
+-            $this->progressTotal += $dataRows;
+-            $pending[] = [$title, $rows, $map];
+         }
+-        $this->publishProgress('importing', true);
+ 
+-        // Second pass: process rows, ticking progress as we go.
+-        foreach ($pending as [$title, $rows, $map]) {
+-            $count = 0;
+-            foreach ($rows as $rowNo => $cells) {
+-                if ($rowNo <= $map['_data_from']) {
+-                    continue;
+-                }
+-                $this->progressDone++;
+-                $this->publishProgress('importing');
++        // Progress denominator = estimated rows across sheets (sheet <dimension>); corrected to exact at the end.
++        foreach ($sheets as $sh) {
++            $this->progressTotal += $sh['rows'];
++        }
++        $this->publishProgress('importing', true);
+ 
+-                $rec = $this->readRecord($cells, $map);
+-                if (!$this->isGraduate($rec)) {
+-                    continue;
+-                }
+-                $count++;
+-                $this->result['graduate_rows']++;
+-                try {
+-                    $this->importRecord("{$title}!{$rowNo}", $rec, $campusId, $year, $dryRun);
+-                } catch (\Throwable $e) {
+-                    $this->result['skipped']++;
+-                    $this->result['errors'][] = "{$title}!{$rowNo}: ".$e->getMessage();
+-                }
+-            }
+-            $this->result['sheets'][$title] = "{$count} graduate rows";
++        foreach ($sheets as $sh) {
++            $this->processSheet($sh['name'], ($sh['open'])(), $campusId, $year, $dryRun);
+         }
++        $this->flushBatch();
++        unset($legacyBook);
++
++        $this->progressTotal = max($this->progressTotal, $this->progressDone);
+         $this->progressDone = $this->progressTotal;
+         $this->publishProgress('done', true);
+ 
+@@ -203,6 +206,68 @@ private function run(string $path, ?int $campusId, ?int $year, bool $dryRun): ar
+         return $this->result;
+     }
+ 
++    /**
++     * Finds the header in the first rows, then streams the rest. The header scan needs random access to ~45 rows only.
++     *
++     * @param  iterable<int, string[]>  $rows  1-based row number => cells
++     */
++    private function processSheet(string $title, iterable $rows, ?int $campusId, ?int $year, bool $dryRun): void
++    {
++        $gen = (static function () use ($rows) {
++            yield from $rows;
++        })();
++
++        $buffer = [];
++        while ($gen->valid() && $gen->key() <= 45) {
++            $buffer[$gen->key()] = $gen->current();
++            $gen->next();
++        }
++        $last = $buffer === [] ? 0 : max(array_keys($buffer));
++        for ($i = 1; $i <= $last; ++$i) {
++            $buffer[$i] ??= [];   // blank rows exist in the old grid too; the header heuristics look one row ahead
++        }
++        ksort($buffer);
++
++        $map = $this->findHeaderMap($buffer);
++        if ($map === null) {
++            $this->result['sheets'][$title] = 'no graduate header — skipped';
++
++            return;
++        }
++
++        $count = 0;
++        $handle = function (int $rowNo, array $cells) use ($map, $title, $campusId, $year, $dryRun, &$count): void {
++            if ($rowNo <= $map['_data_from']) {
++                return;
++            }
++            $this->progressDone++;
++            $this->publishProgress('importing');
++
++            $rec = $this->readRecord($cells, $map);
++            if (!$this->isGraduate($rec)) {
++                return;
++            }
++            $count++;
++            $this->result['graduate_rows']++;
++            try {
++                $this->importRecord("{$title}!{$rowNo}", $rec, $campusId, $year, $dryRun);
++            } catch (\Throwable $e) {
++                $this->result['skipped']++;
++                $this->result['errors'][] = "{$title}!{$rowNo}: ".$e->getMessage();
++            }
++        };
++
++        foreach ($buffer as $rowNo => $cells) {
++            $handle($rowNo, $cells);
++        }
++        unset($buffer);
++        while ($gen->valid()) {
++            $handle($gen->key(), $gen->current());
++            $gen->next();
++        }
++        $this->result['sheets'][$title] = "{$count} graduate rows";
++    }
++
+     /* ------------------------------------------------------------------ *
+      *  Sheet reading + header detection
+      * ------------------------------------------------------------------ */
+@@ -390,11 +455,12 @@ private function importRecord(string $ref, array $rec, ?int $campusId, ?int $for
+             $email = $this->placeholderEmail($firstName, $lastName, $gradYear, $ref);
+             $placeholder = true;
+         }
+-        if ($this->emailExists($email)) {
++        if (isset($this->seenEmails[$email]) || ($dryRun && $this->emailExists($email))) {
+             $this->skip($ref, "{$lastName}, {$firstName}", "email already registered ({$email})");
+ 
+             return;
+         }
++        $this->seenEmails[$email] = true;   // real-import existence check happens once per batch in flushBatch()
+ 
+         [$company, $position] = $this->splitCompanyPosition($rec['company_pos'] ?? '');
+         $statusAfter = trim($rec['status_after'] ?? '');
+@@ -434,7 +500,6 @@ private function importRecord(string $ref, array $rec, ?int $campusId, ?int $for
+             return;
+         }
+ 
+-        $plainPassword = bin2hex(random_bytes(5));
+         $descParts = array_filter([
+             ($rec['industry'] ?? '') !== '' ? "Industry: {$rec['industry']}" : null,
+             ($rec['relevance'] ?? '') !== '' ? "Relevance: {$rec['relevance']}" : null,
+@@ -444,21 +509,22 @@ private function importRecord(string $ref, array $rec, ?int $campusId, ?int $for
+             'Imported from Data on Employment report.',
+         ]);
+ 
+-        DB::transaction(function () use (
+-            $email, $placeholder, $plainPassword, $firstName, $middleName, $lastName, $birthdate, $contact,
+-            $gender, $civilStatus, $city, $province, $gradYear, $college, $course, $campusId,
+-            $company, $position, $expStart, $gradDate, $statusAfter, $sector, $location, $descParts, $wantExperience
+-        ): void {
+-            $userId = DB::table('user')->insertGetId([
++        // Bulk-email safety valve (unchanged): honour the "New Account Emails" setting, cap at EMAIL_CAP.
++        $emailable = !$placeholder && $this->sendCredentialEmails && $this->emailQuota > 0;
++        if ($emailable) {
++            --$this->emailQuota;
++        }
++        $plainPassword = $emailable ? bin2hex(random_bytes(5)) : null;
++
++        $this->batch[] = [
++            'ref' => $ref, 'email' => $email, 'placeholder' => $placeholder, 'plain' => $plainPassword,
++            'user' => [
+                 'email' => $email,
+-                'password' => password_hash($plainPassword, PASSWORD_DEFAULT),
++                'password' => $plainPassword !== null ? password_hash($plainPassword, PASSWORD_DEFAULT) : self::UNUSABLE_PASSWORD,
+                 'user_role' => 'alumni',
+                 'status' => $placeholder ? 'Inactive' : 'Active',
+-                'created_at' => now(),
+-            ]);
+-
+-            $alumniId = DB::table('alumni')->insertGetId([
+-                'user_id' => $userId,
++            ],
++            'alumni' => [
+                 'first_name' => $firstName,
+                 'middle_name' => $middleName !== '' ? $middleName : null,
+                 'last_name' => $lastName,
+@@ -473,72 +539,142 @@ private function importRecord(string $ref, array $rec, ?int $campusId, ?int $for
+                 'course' => $course,
+                 'campus_id' => $campusId,
+                 'verification_document' => '',
+-                'created_at' => now(),
+-            ]);
+-
+-            if ($course !== '') {
+-                DB::table('alumni_education')->insert([
+-                    'alumni_id' => $alumniId,
+-                    'degree' => $course,
+-                    'school' => 'Laguna State Polytechnic University',
+-                    'start_date' => null,
+-                    'end_date' => $gradDate,
+-                    'current' => 0,
+-                    'created_at' => now(),
+-                ]);
++            ],
++            'education' => $course !== '' ? [
++                'degree' => $course,
++                'school' => 'Laguna State Polytechnic University',
++                'start_date' => null,
++                'end_date' => $gradDate,
++                'current' => 0,
++            ] : null,
++            'experience' => $wantExperience ? [
++                'title' => $position !== '' ? $position : 'Not specified',
++                'company' => $company,
++                'start_date' => $expStart,
++                'end_date' => null,
++                'current' => 1,
++                'description' => implode("\n", $descParts),
++                'location_of_work' => $location,
++                'employment_status' => $statusAfter !== '' ? $statusAfter : null,
++                'employment_sector' => $sector,
++            ] : null,
++            'name' => trim("{$firstName} {$lastName}"),
++        ];
++
++        if (count($this->batch) >= self::BATCH_SIZE) {
++            $this->flushBatch();
++        }
++    }
++
++    /**
++     * Writes the queued graduates: ONE existence query, then multi-row INSERTs inside ONE transaction
++     * (was: 1 SELECT + 1 transaction + 3-4 single-row INSERTs + 1 bcrypt per graduate). If the batch fails
++     * (e.g. a concurrent import took one of the e-mails), it is retried row by row so only the bad row is skipped.
++     */
++    private function flushBatch(): void
++    {
++        if ($this->batch === []) {
++            return;
++        }
++        $batch = $this->batch;
++        $this->batch = [];
++
++        $existing = [];
++        foreach (array_chunk(array_column($batch, 'email'), 1000) as $emails) {
++            foreach (DB::table('user')->whereIn('email', $emails)->pluck('email') as $e) {
++                $existing[mb_strtolower($e)] = true;
++            }
++        }
++        $todo = [];
++        foreach ($batch as $row) {
++            if (isset($existing[$row['email']])) {
++                $this->skip($row['ref'], $row['name'], "email already registered ({$row['email']})");
++            } else {
++                $todo[] = $row;
+             }
++        }
++        if ($todo === []) {
++            return;
++        }
+ 
+-            if ($wantExperience) {
+-                DB::table('alumni_experience')->insert([
+-                    'alumni_id' => $alumniId,
+-                    'title' => $position !== '' ? $position : 'Not specified',
+-                    'company' => $company,
+-                    'start_date' => $expStart,
+-                    'end_date' => null,
+-                    'current' => 1,
+-                    'description' => implode("\n", $descParts),
+-                    'location_of_work' => $location,
+-                    'employment_status' => $statusAfter !== '' ? $statusAfter : null,
+-                    'employment_sector' => $sector,
+-                    'created_at' => now(),
+-                    'updated_at' => now(),
+-                ]);
+-                $this->result['experience_rows']++;
++        try {
++            DB::transaction(fn () => $this->writeRows($todo));
++            $written = $todo;
++        } catch (\Throwable) {
++            $written = [];
++            foreach ($todo as $row) {
++                try {
++                    DB::transaction(fn () => $this->writeRows([$row]));
++                    $written[] = $row;
++                } catch (\Throwable $e) {
++                    $this->result['skipped']++;
++                    $this->result['errors'][] = "{$row['ref']}: ".$e->getMessage();
++                }
+             }
+-        });
++        }
+ 
+-        $this->result['imported']++;
+-        if ($placeholder) {
+-            $this->result['placeholder_emails']++;
++        foreach ($written as $row) {
++            $this->result['imported']++;
++            if ($row['placeholder']) {
++                $this->result['placeholder_emails']++;
++            }
++            if ($row['experience'] !== null) {
++                $this->result['experience_rows']++;
++            }
++            if ($row['plain'] !== null) {
++                $this->sendCredentialEmail($row['email'], $row['name'], $row['plain']);
++            }
+         }
++    }
+ 
+-        // Bulk-email safety valve: honour the "New Account Emails" setting,
+-        // but stop after 200 so a large import can't time out mid-run
+-        // sending hundreds of SMTP messages synchronously.
+-        if (!$placeholder && $this->sendCredentialEmails && $this->result['emailed'] < 200
+-            && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+-            try {
+-                $name = trim("{$firstName} {$lastName}");
+-                (new MailService())->send(
+-                    $email,
+-                    $name,
+-                    'Your LSPU EIS Alumni Account',
+-                    MailService::wrap(
+-                        'Welcome, '.htmlspecialchars($name).'!',
+-                        '<p>Your alumni account has been created by the administrator and is already active.</p>'
+-                            .'<div style="background:#f1f5f9;border-radius:8px;padding:16px 18px;margin:16px 0;">'
+-                            ."<p style=\"margin:0 0 6px;\"><strong>Email:</strong> {$email}</p>"
+-                            ."<p style=\"margin:0;\"><strong>Password:</strong> {$plainPassword}</p>"
+-                            .'</div>'
+-                            .'<p>For security, please change your password after logging in.</p>',
+-                        'Login to LSPU EIS',
+-                        config('app.url').'/login'
+-                    )
+-                );
+-                $this->result['emailed']++;
+-            } catch (\Throwable $e) {
+-                $this->result['warnings'][] = "Could not email {$email}: ".$e->getMessage();
++    private function writeRows(array $rows): void
++    {
++        $now = now();
++        $stamp = static fn (array $r): array => $r + ['created_at' => $now];
++
++        DB::table('user')->insert(array_map(static fn ($r) => $stamp($r['user']), $rows));
++        $userIds = DB::table('user')->whereIn('email', array_column($rows, 'email'))->pluck('user_id', 'email');
++
++        DB::table('alumni')->insert(array_map(fn ($r) => $stamp($r['alumni'] + ['user_id' => $userIds[$r['email']]]), $rows));
++        $alumniIds = DB::table('alumni')->whereIn('user_id', $userIds->values()->all())->pluck('alumni_id', 'user_id');
++
++        $edu = [];
++        $exp = [];
++        foreach ($rows as $r) {
++            $aid = $alumniIds[$userIds[$r['email']]];
++            if ($r['education'] !== null) {
++                $edu[] = $stamp($r['education'] + ['alumni_id' => $aid]);
+             }
++            if ($r['experience'] !== null) {
++                $exp[] = $r['experience'] + ['alumni_id' => $aid, 'created_at' => $now, 'updated_at' => $now];
++            }
++        }
++        $edu && DB::table('alumni_education')->insert($edu);
++        $exp && DB::table('alumni_experience')->insert($exp);
++    }
++
++    private function sendCredentialEmail(string $email, string $name, string $plainPassword): void
++    {
++        try {
++            (new MailService())->send(
++                $email,
++                $name,
++                'Your LSPU EIS Alumni Account',
++                MailService::wrap(
++                    'Welcome, '.htmlspecialchars($name).'!',
++                    '<p>Your alumni account has been created by the administrator and is already active.</p>'
++                        .'<div style="background:#f1f5f9;border-radius:8px;padding:16px 18px;margin:16px 0;">'
++                        ."<p style=\"margin:0 0 6px;\"><strong>Email:</strong> {$email}</p>"
++                        ."<p style=\"margin:0;\"><strong>Password:</strong> {$plainPassword}</p>"
++                        .'</div>'
++                        .'<p>For security, please change your password after logging in.</p>',
++                    'Login to LSPU EIS',
++                    config('app.url').'/login'
++                )
++            );
++            $this->result['emailed']++;
++        } catch (\Throwable $e) {
++            $this->result['warnings'][] = "Could not email {$email}: ".$e->getMessage();
+         }
+     }
+ 
+diff --git a/app/Services/SpreadsheetRowStream.php b/app/Services/SpreadsheetRowStream.php
+new file mode 100644
+index 0000000..1d4f932
+--- /dev/null
++++ b/app/Services/SpreadsheetRowStream.php
+@@ -0,0 +1,269 @@
++<?php
++
++namespace App\Services;
++
++use ZipArchive;
++
++/**
++ * Forward-only, constant-memory row reader for .xlsx and .csv files.
++ *
++ * Why not PhpSpreadsheet: IOFactory::load() materialises every cell as an
++ * object — measured at ~12.8 KB per graduate row, so a 100,000-row workbook
++ * exhausts the importer's 1 GB memory_limit before a single row is written
++ * (and six concurrent imports would each hold ~1 GB). This reader streams the
++ * sheet XML and keeps only the shared-string table in memory.
++ *
++ * Cell values come back as trimmed display strings, like the importer's old
++ * rangeToArray() grid. Numeric cells are returned as their raw stored text
++ * (dates as Excel serials) — the importer's fromExcelSerial() already turns
++ * those into dates.
++ */
++final class SpreadsheetRowStream
++{
++    private const MAX_COLUMNS = 40;
++
++    /** @var string[]|null */
++    private ?array $shared = null;
++
++    private function __construct(private readonly string $path, private readonly string $kind)
++    {
++    }
++
++    public static function supports(string $path): bool
++    {
++        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
++        if ($ext === 'csv') {
++            return true;
++        }
++        if ($ext !== 'xlsx') {
++            // uploaded temp files have no extension — sniff the zip signature
++            $fh = @fopen($path, 'rb');
++            $sig = $fh ? fread($fh, 4) : '';
++            $fh && fclose($fh);
++
++            return $sig === "PK\x03\x04" && self::hasEntry($path, 'xl/workbook.xml');
++        }
++
++        return true;
++    }
++
++    public static function open(string $path, ?string $clientExtension = null): self
++    {
++        $ext = strtolower($clientExtension ?? pathinfo($path, PATHINFO_EXTENSION));
++        $isCsv = $ext === 'csv' || (!self::hasEntry($path, 'xl/workbook.xml') && $ext !== 'xlsx');
++
++        return new self($path, $isCsv ? 'csv' : 'xlsx');
++    }
++
++    private static function hasEntry(string $path, string $entry): bool
++    {
++        $zip = new ZipArchive();
++        if ($zip->open($path) !== true) {
++            return false;
++        }
++        $ok = $zip->locateName($entry) !== false;
++        $zip->close();
++
++        return $ok;
++    }
++
++    /**
++     * @return array<int, array{name: string, ref: string, rows: int}>  ref = zip entry (xlsx) or '' (csv); rows = estimated row count
++     */
++    public function sheets(): array
++    {
++        if ($this->kind === 'csv') {
++            $n = 0;
++            $fh = fopen($this->path, 'rb');
++            while ($fh && !feof($fh)) {
++                $n += substr_count((string) fread($fh, 1 << 20), "\n");
++            }
++            $fh && fclose($fh);
++
++            return [['name' => 'CSV', 'ref' => '', 'rows' => $n + 1]];
++        }
++
++        $zip = new ZipArchive();
++        if ($zip->open($this->path) !== true) {
++            throw new \RuntimeException('Could not open the workbook (is it a valid .xlsx file?).');
++        }
++        $rels = [];
++        $relXml = $zip->getFromName('xl/_rels/workbook.xml.rels');
++        if ($relXml !== false && preg_match_all('/<Relationship\b[^>]*>/i', $relXml, $m)) {
++            foreach ($m[0] as $tag) {
++                if (preg_match('/\bId="([^"]+)"/', $tag, $id) && preg_match('/\bTarget="([^"]+)"/', $tag, $t)) {
++                    $target = ltrim($t[1], '/');
++                    $rels[$id[1]] = str_starts_with($target, 'xl/') ? $target : 'xl/'.$target;
++                }
++            }
++        }
++        $wb = (string) $zip->getFromName('xl/workbook.xml');
++        $out = [];
++        if (preg_match_all('/<sheet\b[^>]*>/i', $wb, $m)) {
++            foreach ($m[0] as $tag) {
++                if (!preg_match('/\bname="([^"]*)"/', $tag, $name) || !preg_match('/\br:id="([^"]+)"/', $tag, $rid) || !isset($rels[$rid[1]])) {
++                    continue;
++                }
++                $rows = 0;
++                $stream = $zip->getStream($rels[$rid[1]]);
++                if ($stream) {
++                    $head = (string) fread($stream, 8192);
++                    fclose($stream);
++                    if (preg_match('/<dimension\b[^>]*ref="[A-Z]+\d+:[A-Z]+(\d+)"/i', $head, $d)) {
++                        $rows = (int) $d[1];
++                    }
++                }
++                $out[] = ['name' => html_entity_decode($name[1], ENT_QUOTES | ENT_XML1), 'ref' => $rels[$rid[1]], 'rows' => $rows];
++            }
++        }
++        $zip->close();
++
++        return $out;
++    }
++
++    /** @return \Generator<int, string[]>  1-based row number => 0-based cells (blank rows are skipped) */
++    public function rows(string $ref): \Generator
++    {
++        if ($this->kind === 'csv') {
++            yield from $this->csvRows();
++
++            return;
++        }
++
++        $this->loadSharedStrings();
++        $reader = new \XMLReader();
++        if (!$reader->open('zip://'.$this->path.'#'.$ref, null, LIBXML_NONET | LIBXML_COMPACT)) {
++            throw new \RuntimeException("Could not read worksheet {$ref}.");
++        }
++        $doc = new \DOMDocument();
++        $rowNo = 0;
++        while ($reader->read()) {
++            if ($reader->nodeType !== \XMLReader::ELEMENT || $reader->localName !== 'row') {
++                continue;
++            }
++            $rowNo = (int) ($reader->getAttribute('r') ?: $rowNo + 1);
++            $node = $reader->expand($doc);
++            $cells = [];
++            $col = 0;
++            foreach ($node->childNodes as $c) {
++                if (!$c instanceof \DOMElement || $c->localName !== 'c') {
++                    continue;
++                }
++                $cellRef = $c->getAttribute('r');
++                if ($cellRef !== '' && preg_match('/^([A-Z]+)/', $cellRef, $m)) {
++                    $col = self::columnIndex($m[1]);
++                }
++                if ($col < self::MAX_COLUMNS) {
++                    $cells[$col] = trim($this->cellText($c));
++                }
++                ++$col;
++            }
++            if ($cells !== []) {
++                $max = min(self::MAX_COLUMNS - 1, max(array_keys($cells)));
++                $line = [];
++                for ($i = 0; $i <= $max; ++$i) {
++                    $line[] = $cells[$i] ?? '';
++                }
++                yield $rowNo => $line;
++            }
++        }
++        $reader->close();
++    }
++
++    private function csvRows(): \Generator
++    {
++        $fh = fopen($this->path, 'rb');
++        if (!$fh) {
++            throw new \RuntimeException('Could not read the CSV file.');
++        }
++        $rowNo = 0;
++        while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
++            ++$rowNo;
++            if ($rowNo === 1 && isset($row[0])) {
++                $row[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) $row[0]);   // UTF-8 BOM
++            }
++            if ($row === [null]) {
++                continue;
++            }
++            yield $rowNo => array_map(static fn ($v) => trim((string) ($v ?? '')), array_slice($row, 0, self::MAX_COLUMNS));
++        }
++        fclose($fh);
++    }
++
++    private function cellText(\DOMElement $c): string
++    {
++        $t = $c->getAttribute('t');
++        if ($t === 'inlineStr') {
++            $s = '';
++            foreach ($c->getElementsByTagName('t') as $tn) {
++                $s .= $tn->textContent;
++            }
++
++            return $s;
++        }
++        $v = '';
++        foreach ($c->childNodes as $ch) {
++            if ($ch instanceof \DOMElement && $ch->localName === 'v') {
++                $v = $ch->textContent;
++                break;
++            }
++        }
++
++        return match ($t) {
++            's' => $this->shared[(int) $v] ?? '',
++            'b' => $v === '1' ? 'TRUE' : 'FALSE',
++            'e' => '',
++            default => $v,
++        };
++    }
++
++    private function loadSharedStrings(): void
++    {
++        if ($this->shared !== null) {
++            return;
++        }
++        $this->shared = [];
++        $zip = new ZipArchive();
++        if ($zip->open($this->path) !== true || $zip->locateName('xl/sharedStrings.xml') === false) {
++            return;
++        }
++        $zip->close();
++        $reader = new \XMLReader();
++        $reader->open('zip://'.$this->path.'#xl/sharedStrings.xml', null, LIBXML_NONET | LIBXML_COMPACT);
++        $cur = null;
++        $inPhonetic = false;
++        while ($reader->read()) {
++            if ($reader->nodeType === \XMLReader::ELEMENT) {
++                if ($reader->localName === 'si') {
++                    $cur = '';
++                    if ($reader->isEmptyElement) {
++                        $this->shared[] = '';
++                        $cur = null;
++                    }
++                } elseif ($reader->localName === 'rPh') {
++                    $inPhonetic = true;
++                } elseif ($reader->localName === 't' && $cur !== null && !$inPhonetic && !$reader->isEmptyElement) {
++                    $cur .= $reader->readString();
++                }
++            } elseif ($reader->nodeType === \XMLReader::END_ELEMENT) {
++                if ($reader->localName === 'si' && $cur !== null) {
++                    $this->shared[] = $cur;
++                    $cur = null;
++                } elseif ($reader->localName === 'rPh') {
++                    $inPhonetic = false;
++                }
++            }
++        }
++        $reader->close();
++    }
++
++    private static function columnIndex(string $letters): int
++    {
++        $n = 0;
++        foreach (str_split($letters) as $ch) {
++            $n = $n * 26 + (ord($ch) - 64);
++        }
++
++        return $n - 1;
++    }
++}
+diff --git a/app/Support/HeavyCache.php b/app/Support/HeavyCache.php
+new file mode 100644
+index 0000000..fe41ba6
+--- /dev/null
++++ b/app/Support/HeavyCache.php
+@@ -0,0 +1,81 @@
++<?php
++
++namespace App\Support;
++
++use Illuminate\Contracts\Cache\LockTimeoutException;
++use Illuminate\Support\Facades\Cache;
++
++/**
++ * Cache for expensive aggregate payloads (dashboard totals, report summaries) that adds what Cache::remember lacks:
++ *
++ *  1. Single builder on a cold miss. With Cache::remember every concurrent request that misses runs the full
++ *     multi-second aggregation itself (measured: 7 dashboard users at 100k alumni => 7 parallel builds, P99 6.8 s;
++ *     at 1M => MySQL at 5.7 cores and unrelated pages at 23 s). Here one request builds under an atomic lock and the
++ *     others wait for its result.
++ *  2. Stale-while-revalidate. After the fresh window, callers are handed the previous payload immediately and ONE
++ *     refresh runs after their response has been sent, so nobody waits on a rebuild in steady state.
++ *  3. Cheap invalidation. markStale() (called after bulk imports) flags every payload as stale in O(1); it keeps
++ *     serving the old numbers instantly while a single refresh per key runs — instead of dropping them and sending
++ *     the next visitors into the cold-miss path.
++ */
++final class HeavyCache
++{
++    private const STALE_AFTER_KEY = 'heavycache:stale_after';
++    private const LOCK_SECONDS = 900;
++    private const WAIT_SECONDS = 600;
++
++    /**
++     * @param  int  $fresh  seconds a payload is served without any refresh
++     * @param  int  $keep  seconds a stale payload may still be served while it is refreshed (>= $fresh)
++     */
++    public static function remember(string $key, int $fresh, int $keep, callable $build): mixed
++    {
++        $value = Cache::get($key);
++        $created = Cache::get($key.':created');
++
++        if ($value !== null && $created !== null) {
++            $staleAfter = (int) Cache::get(self::STALE_AFTER_KEY, 0);
++            if ($created > $staleAfter && $created + $fresh > time()) {
++                return $value;
++            }
++
++            defer(function () use ($key, $created, $keep, $build) {
++                Cache::lock('heavycache:build:'.$key, self::LOCK_SECONDS)->get(function () use ($key, $created, $keep, $build) {
++                    if (Cache::get($key.':created') !== $created) {
++                        return;   // someone else already refreshed it
++                    }
++                    self::store($key, $build(), $keep);
++                });
++            }, 'heavycache:'.$key);
++
++            return $value;
++        }
++
++        try {
++            return Cache::lock('heavycache:build:'.$key, self::LOCK_SECONDS)->block(self::WAIT_SECONDS, function () use ($key, $keep, $build) {
++                $value = Cache::get($key);
++                if ($value !== null && Cache::get($key.':created') !== null) {
++                    return $value;   // built by the request we were waiting behind
++                }
++
++                return self::store($key, $build(), $keep);
++            });
++        } catch (LockTimeoutException) {
++            return $build();   // the builder is taking unusually long — degrade to computing it ourselves
++        }
++    }
++
++    /** Flags every heavy payload stale; they keep being served while one refresh per key runs after the next request. */
++    public static function markStale(): void
++    {
++        Cache::forever(self::STALE_AFTER_KEY, time());
++    }
++
++    private static function store(string $key, mixed $value, int $keep): mixed
++    {
++        Cache::put($key, $value, $keep);
++        Cache::put($key.':created', time(), $keep);
++
++        return $value;
++    }
++}
+diff --git a/database/migrations/2026_09_21_000000_ensure_reporting_and_covering_indexes.php b/database/migrations/2026_09_21_000000_ensure_reporting_and_covering_indexes.php
+new file mode 100644
+index 0000000..af3e80e
+--- /dev/null
++++ b/database/migrations/2026_09_21_000000_ensure_reporting_and_covering_indexes.php
+@@ -0,0 +1,87 @@
++<?php
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Support\Facades\DB;
++
++/**
++ * Makes sure the indexes the Dashboard / Reports / Alumni-map queries benefit from actually exist.
++ *
++ * Why a NEW migration instead of relying on 2026_09_09_170000_add_reporting_indexes_for_bulk_alumni:
++ * docker/entrypoint.sh imports database/schema.sql on a fresh database and then INSERTs a `migrations` row for every
++ * migration file present, assuming schema.sql already contains their changes. schema.sql did not contain the 2026_09_09
++ * indexes, so a fresh deploy recorded that migration as applied while the indexes were never created. This migration has
++ * a new name (so it is pending on such a database) and every step is skipped when an index with the same leading columns
++ * already exists, so it is a no-op where the indexes are present (the 09_09 migration also named its indexes differently
++ * from the names its own guard checked, so matching by NAME would create duplicates).
++ *
++ * Each index below was A/B-tested at 1M alumni with MySQL 8 invisible indexes (tests/Performance/index_ab.php); only indexes
++ * with a measured win are here. Tested and REJECTED (no measurable gain): alumni_experience (alumni_id,current,end_date),
++ * alumni_experience (current,alumni_id,location_of_work,employment_sector,employment_status), and the low-cardinality
++ * alumni_experience(employment_status) added by 09_09.
++ *
++ * Write cost: one extra B-tree insert per alumni row on bulk import (4 narrow indexes on `alumni`); storage ~15-25 MB each at 1M rows.
++ */
++return new class extends Migration
++{
++    /** index name => [columns, measured benefit] */
++    private const INDEXES = [
++        // "SELECT course, college FROM alumni GROUP BY ..." 906 ms -> 12 ms (covering, ordered: no scan, no temp table)
++        'alumni_course_college_index' => 'course, college',
++        // campus-scoped program list "WHERE campus_id IN (...) GROUP BY campus_id, course, college" 838 ms -> 39 ms
++        'alumni_campus_course_college_index' => 'campus_id, course, college',
++        // dashboard alumni map GROUP BY city, province, course: 7.3 s -> 4.0 s; alumniAtLocation() WHERE city=? AND province=?
++        'alumni_city_province_course_index' => 'city, province, course',
++        // Reports year filter (year_graduated = ?): job-title aggregate 1.6 s -> 0.29 s; distinctYears()
++        'alumni_year_graduated_index' => 'year_graduated',
++        // Reports campus + year filter
++        'alumni_campus_id_year_graduated_index' => 'campus_id, year_graduated',
++    ];
++
++    public function up(): void
++    {
++        foreach (self::INDEXES as $name => $columns) {
++            if (!$this->hasIndexStartingWith('alumni', $columns)) {
++                DB::statement("ALTER TABLE `alumni` ADD INDEX `{$name}` ({$columns})");
++            }
++        }
++    }
++
++    public function down(): void
++    {
++        foreach (array_keys(self::INDEXES) as $name) {
++            if ($this->named('alumni', $name)) {
++                DB::statement("ALTER TABLE `alumni` DROP INDEX `{$name}`");
++            }
++        }
++    }
++
++    /** True when some index on the table already starts with exactly these columns (in order). */
++    private function hasIndexStartingWith(string $table, string $columns): bool
++    {
++        $wanted = array_map('trim', explode(',', $columns));
++        $rows = DB::table('information_schema.statistics')
++            ->where('table_schema', DB::connection()->getDatabaseName())
++            ->where('table_name', $table)
++            ->orderBy('index_name')->orderBy('seq_in_index')
++            ->get(['index_name as idx', 'column_name as col']);
++
++        $byIndex = [];
++        foreach ($rows as $r) {
++            $byIndex[$r->idx][] = $r->col;
++        }
++        foreach ($byIndex as $cols) {
++            if (array_slice($cols, 0, count($wanted)) === $wanted) {
++                return true;
++            }
++        }
++
++        return false;
++    }
++
++    private function named(string $table, string $index): bool
++    {
++        return DB::table('information_schema.statistics')
++            ->where('table_schema', DB::connection()->getDatabaseName())
++            ->where('table_name', $table)->where('index_name', $index)->exists();
++    }
++};
+diff --git a/database/schema.sql b/database/schema.sql
+index d14f9d7..bbb9093 100644
+--- a/database/schema.sql
++++ b/database/schema.sql
+@@ -75,6 +75,11 @@ CREATE TABLE `alumni` (
+   KEY `fk_alumni_campus` (`campus_id`),
+   KEY `alumni_college_index` (`college`),
+   KEY `alumni_created_at_index` (`created_at`),
++  KEY `alumni_course_college_index` (`course`,`college`),
++  KEY `alumni_campus_course_college_index` (`campus_id`,`course`,`college`),
++  KEY `alumni_city_province_course_index` (`city`,`province`,`course`),
++  KEY `alumni_year_graduated_index` (`year_graduated`),
++  KEY `alumni_campus_id_year_graduated_index` (`campus_id`,`year_graduated`),
+   CONSTRAINT `alumni_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `user` (`user_id`) ON DELETE CASCADE,
+   CONSTRAINT `fk_alumni_campus` FOREIGN KEY (`campus_id`) REFERENCES `campus` (`campus_id`) ON DELETE SET NULL
+ ) ENGINE=InnoDB AUTO_INCREMENT=999991 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+diff --git a/tests/Unit/Services/SpreadsheetRowStreamTest.php b/tests/Unit/Services/SpreadsheetRowStreamTest.php
+new file mode 100644
+index 0000000..052f8b2
+--- /dev/null
++++ b/tests/Unit/Services/SpreadsheetRowStreamTest.php
+@@ -0,0 +1,94 @@
++<?php
++
++namespace Tests\Unit\Services;
++
++use App\Services\SpreadsheetRowStream;
++use PhpOffice\PhpSpreadsheet\RichText\RichText;
++use PhpOffice\PhpSpreadsheet\Shared\Date;
++use PhpOffice\PhpSpreadsheet\Spreadsheet;
++use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
++use Tests\TestCase;
++
++class SpreadsheetRowStreamTest extends TestCase
++{
++    private string $file;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->file = tempnam(sys_get_temp_dir(), 'srs').'.xlsx';
++    }
++
++    protected function tearDown(): void
++    {
++        @unlink($this->file);
++        parent::tearDown();
++    }
++
++    public function testStreamsSheetsRowsBlankGapsRichTextAndDates(): void
++    {
++        $wb = new Spreadsheet();
++        $wb->getActiveSheet()->setTitle('Summary')->fromArray([['a', 'b']], null, 'A1');
++        $ws = $wb->createSheet()->setTitle('CCS');
++        $ws->fromArray([['No.', 'Name of Graduates', 'Date']], null, 'A2');
++        $ws->setCellValue('A4', 1);
++        $ws->setCellValue('B4', 'DELA CRUZ, MARY');
++        $ws->setCellValue('C4', Date::PHPToExcel(new \DateTime('2023-06-15')));
++        $rich = new RichText();
++        $rich->createTextRun('LOPEZ, ')->getFont()->setBold(true);
++        $rich->createTextRun('LIZA');
++        $ws->setCellValue('B6', $rich);
++        $ws->setCellValue('D6', 'skips column C');
++        (new Xlsx($wb))->save($this->file);
++
++        $stream = SpreadsheetRowStream::open($this->file, 'xlsx');
++        $sheets = $stream->sheets();
++        $this->assertSame(['Summary', 'CCS'], array_column($sheets, 'name'));
++        $this->assertGreaterThanOrEqual(6, $sheets[1]['rows']);
++
++        $rows = iterator_to_array($stream->rows($sheets[1]['ref']));
++        $this->assertSame([2, 4, 6], array_keys($rows), 'real row numbers are preserved; blank rows are skipped');
++        $this->assertSame(['No.', 'Name of Graduates', 'Date'], $rows[2]);
++        $this->assertSame('1', $rows[4][0]);
++        $this->assertSame('DELA CRUZ, MARY', $rows[4][1]);
++        $this->assertEqualsWithDelta(Date::PHPToExcel(new \DateTime('2023-06-15')), (float) $rows[4][2], 0.0001, 'dates come back as the Excel serial the importer already understands');
++        $this->assertSame('LOPEZ, LIZA', $rows[6][1], 'rich-text runs are concatenated');
++        $this->assertSame(['', 'LOPEZ, LIZA', '', 'skips column C'], $rows[6], 'missing cells are padded so column indexes line up');
++    }
++
++    public function testStreamsCsvWithBomAndQuotedCommas(): void
++    {
++        $csv = tempnam(sys_get_temp_dir(), 'srs').'.csv';
++        file_put_contents($csv, "\xEF\xBB\xBFNo.,Name of Graduates\n1,\"CRUZ, JUAN\"\n\n2,SANTOS\n");
++        $stream = SpreadsheetRowStream::open($csv, 'csv');
++        $rows = iterator_to_array($stream->rows(''));
++        @unlink($csv);
++
++        $this->assertSame(['No.', 'Name of Graduates'], $rows[1], 'UTF-8 BOM stripped');
++        $this->assertSame(['1', 'CRUZ, JUAN'], $rows[2]);
++        $this->assertSame(['2', 'SANTOS'], $rows[4]);
++    }
++
++    public function testMemoryStaysFlatOnALargeSheet(): void
++    {
++        $wb = new Spreadsheet();
++        $ws = $wb->getActiveSheet();
++        for ($r = 1; $r <= 4000; ++$r) {
++            $ws->fromArray([[$r, "NAME {$r}", 'BSIT', 'x@y.test']], null, "A{$r}");
++        }
++        (new Xlsx($wb))->save($this->file);
++        unset($wb, $ws);
++
++        $stream = SpreadsheetRowStream::open($this->file, 'xlsx');
++        $ref = $stream->sheets()[0]['ref'];
++        $before = memory_get_usage();
++        $n = 0;
++        $peakDelta = 0;
++        foreach ($stream->rows($ref) as $row) {
++            ++$n;
++            $peakDelta = max($peakDelta, memory_get_usage() - $before);
++        }
++        $this->assertSame(4000, $n);
++        $this->assertLessThan(8 * 1024 * 1024, $peakDelta, 'streaming reader must not retain the whole sheet');
++    }
++}
+diff --git a/tests/Unit/Support/HeavyCacheTest.php b/tests/Unit/Support/HeavyCacheTest.php
+new file mode 100644
+index 0000000..045e5d3
+--- /dev/null
++++ b/tests/Unit/Support/HeavyCacheTest.php
+@@ -0,0 +1,63 @@
++<?php
++
++namespace Tests\Unit\Support;
++
++use App\Support\HeavyCache;
++use Illuminate\Support\Facades\Cache;
++use Tests\TestCase;
++
++class HeavyCacheTest extends TestCase
++{
++    protected function setUp(): void
++    {
++        parent::setUp();
++        Cache::flush();
++    }
++
++    public function testBuildsOnceAndServesFromCacheWhileFresh(): void
++    {
++        $calls = 0;
++        $build = function () use (&$calls) {
++            ++$calls;
++
++            return ['n' => $calls];
++        };
++
++        $this->assertSame(['n' => 1], HeavyCache::remember('k1', 600, 3600, $build));
++        $this->assertSame(['n' => 1], HeavyCache::remember('k1', 600, 3600, $build));
++        $this->assertSame(1, $calls);
++    }
++
++    public function testMarkStaleKeepsServingTheOldPayloadInsteadOfRebuildingInline(): void
++    {
++        $calls = 0;
++        $build = function () use (&$calls) {
++            ++$calls;
++
++            return ['n' => $calls];
++        };
++        HeavyCache::remember('k2', 600, 3600, $build);
++
++        $this->travel(2)->seconds();
++        HeavyCache::markStale();
++
++        // stale payload is returned immediately; the refresh is deferred until after the response
++        $this->assertSame(['n' => 1], HeavyCache::remember('k2', 600, 3600, $build));
++        $this->assertSame(1, $calls, 'no inline rebuild for the requesting user');
++    }
++
++    public function testExpiredFreshWindowAlsoServesStale(): void
++    {
++        $calls = 0;
++        $build = function () use (&$calls) {
++            ++$calls;
++
++            return ['n' => $calls];
++        };
++        HeavyCache::remember('k3', 10, 3600, $build);
++        $this->travel(11)->seconds();
++
++        $this->assertSame(['n' => 1], HeavyCache::remember('k3', 10, 3600, $build));
++        $this->assertSame(1, $calls);
++    }
++}

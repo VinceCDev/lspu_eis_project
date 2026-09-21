@@ -1,0 +1,8 @@
+summaries settled after 2s (stale partitions=2, queued rebuilds=3)
+failed_jobs: 0
+user                  1,600,304
+alumni                1,599,997
+alumni_education      1,599,997
+alumni_experience     1,149,829
+applications             19,980
+audit_logs                    8

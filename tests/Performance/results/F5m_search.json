@@ -1,0 +1,87 @@
+{
+ "name": "F5m_search",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 71,
+ "overall": {
+  "n": 10,
+  "rps": 0.14,
+  "avg": 16194,
+  "p50": 391,
+  "p95": 70249,
+  "p99": 70249,
+  "max": 70249,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 10,
+  "kb": 19
+ },
+ "byLabel": {
+  "search:paginatedList(q)": {
+   "n": 5,
+   "rps": 0.07,
+   "avg": 32062,
+   "p50": 6714,
+   "p95": 70249,
+   "p99": 70249,
+   "max": 70249,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 5,
+   "kb": 14,
+   "perf": {
+    "db_ms_avg": 31953,
+    "q_avg": 5,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  },
+  "search:paginatedList(page)": {
+   "n": 5,
+   "rps": 0.07,
+   "avg": 325,
+   "p50": 338,
+   "p95": 391,
+   "p99": 391,
+   "max": 391,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 5,
+   "kb": 24,
+   "perf": {
+    "db_ms_avg": 204,
+    "q_avg": 10,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 8,
+   "p50": 6541,
+   "p95": 70249
+  },
+  {
+   "t": 70,
+   "n": 2,
+   "p50": 265,
+   "p95": 391
+  }
+ ],
+ "errBodies": [],
+ "upload_window_ms": null
+}

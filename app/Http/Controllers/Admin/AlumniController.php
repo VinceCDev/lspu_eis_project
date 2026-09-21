@@ -3,16 +3,21 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessEmploymentImport;
 use App\Models\Alumni;
 use App\Models\AuditLog;
+use App\Models\ImportJob;
 use App\Models\SiteSetting;
 use App\Models\User;
 use App\Services\Auth;
-use App\Services\EmploymentReportImporter;
 use App\Services\MailService;
+use App\Services\ReportingSummary;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Str;
 
 /** Ported from backend/Controllers/Admin/AlumniController.php. */
 class AlumniController extends Controller
@@ -37,8 +42,35 @@ class AlumniController extends Controller
         ]);
     }
 
+    /** Largest alumni set the unpaginated list()/pendingList() endpoints will build (see guardUnboundedList()). */
+    private const MAX_UNPAGINATED = 25000;
+
+    /**
+     * list() ships every alumnus of the campus (plus skills/education/experience/resume) as ONE JSON document, built in PHP
+     * memory. Measured: 28 MB at 30k rows, HTTP 500 (memory) after 28 s at 150k and 122 s at 300k, and the query it runs
+     * competes with every other user. Refuse early with an actionable message instead; paginatedList() is the scalable path.
+     */
+    private function guardUnboundedList(string $status): ?JsonResponse
+    {
+        $campusId = Auth::role() === 'superadmin' ? null : Auth::campusId();
+        $total = (new Alumni())->countByStatus($status, $campusId);
+        if ($total > self::MAX_UNPAGINATED) {
+            return response()->json([
+                'success' => false,
+                'message' => 'There are '.number_format($total).' alumni records - too many to load at once. Use search/filters (paged list).',
+                'total' => $total,
+            ], 413);
+        }
+
+        return null;
+    }
+
     public function list(): JsonResponse
     {
+        if ($blocked = $this->guardUnboundedList('Active')) {
+            return $blocked;
+        }
+
         $alumniModel = new Alumni();
         $alumni = Auth::role() === 'superadmin'
             ? $alumniModel->allByStatus('Active')
@@ -55,23 +87,63 @@ class AlumniController extends Controller
      */
     public function paginatedList(Request $request): JsonResponse
     {
+        if (Session::isStarted()) {
+            Session::save();   // read-only endpoint: don't hold the session lock while querying
+        }
         $page = max(1, (int) $request->query('page', '1'));
         $perPage = min(100, max(1, (int) $request->query('per_page', '25')));
         $search = trim((string) $request->query('search', ''));
         $offset = ($page - 1) * $perPage;
         $campusId = Auth::role() === 'superadmin' ? null : Auth::campusId();
+        $status = in_array($request->query('status'), ['Active', 'Inactive', 'Pending'], true) ? (string) $request->query('status') : 'Active';
+        $filters = [
+            'campus_id' => Auth::role() === 'superadmin' ? (int) $request->query('campus_id', '0') : 0,
+            'college' => trim((string) $request->query('college', '')),
+            'course' => trim((string) $request->query('course', '')),
+            'year' => (int) $request->query('year', '0'),
+        ];
+
+        // OFFSET n reads and discards n rows: past this the honest answer is "narrow it down" (search / filters).
+        if ($offset > self::MAX_OFFSET) {
+            return response()->json([
+                'success' => false,
+                'message' => 'That page is too deep to load directly. Use search or the campus / college / course filters to narrow the list.',
+            ], 422);
+        }
 
         $alumniModel = new Alumni();
-        $alumni = $alumniModel->allByStatusPaginated('Active', $campusId, $perPage, $offset, $search);
+        $alumni = $alumniModel->allByStatusPaginated($status, $campusId, $perPage, $offset, $search, $filters);
+
+        // The total is only a display number. Unfiltered 'Active' totals come from the summary build (an exact COUNT over a
+        // 1M-row join measured 5 s); everything else is counted live but capped ("10,000+"), cached for a minute when there
+        // is no search term.
+        $narrowed = $search !== '' || $filters['college'] !== '' || $filters['course'] !== '' || $filters['year'] > 0;
+        $scopeCampus = $campusId ?? ($filters['campus_id'] > 0 ? $filters['campus_id'] : null);
+        $total = $status === 'Active' && !$narrowed ? ReportingSummary::activeUsers($scopeCampus) : null;
+        $capped = false;
+        if ($total === null) {
+            $count = fn () => $alumniModel->countByStatus($status, $campusId, $search, $filters, self::COUNT_CAP);
+            $total = $search === ''
+                ? (int) Cache::remember('alumni_count:'.md5(json_encode([$status, $campusId, $filters])), 60, $count)
+                : $count();
+            $capped = $total > self::COUNT_CAP;   // live counts stop at the cap; the summary total above is exact
+        }
 
         return response()->json([
             'success' => true,
             'alumni' => $this->withDetails($alumniModel, $alumni),
-            'total' => $alumniModel->countByStatus('Active', $campusId, $search),
+            'total' => $total,
+            'total_capped' => $capped,
             'page' => $page,
             'per_page' => $perPage,
         ]);
     }
+
+    /** Live totals stop counting here and are shown as "1,000+" (an exact count of a broad search is thousands of random row lookups: 10 s at 1M, ~70 s cold at 5M with a small buffer pool). */
+    private const COUNT_CAP = 1000;
+
+    /** Deepest OFFSET the paged list will serve (see paginatedList()). */
+    private const MAX_OFFSET = 100000;
 
     public function pendingList(): JsonResponse
     {
@@ -247,8 +319,14 @@ class AlumniController extends Controller
     }
 
     /**
-     * Bulk-import graduates from an LSPU "Data on Employment" (tracer) Excel
-     * file. Non-superadmin admins can only import into their own campus.
+     * Bulk-import graduates from an LSPU "Data on Employment" (tracer) Excel file. Non-superadmin admins can only import
+     * into their own campus.
+     *
+     * The request only STORES the file and QUEUES the import, then returns immediately (HTTP 202-style JSON with the import
+     * id). A queue worker (App\Jobs\ProcessEmploymentImport) does the parsing/inserting in chunks, with progress, retries
+     * and a limit on how many imports run at once; the browser polls importStatus() and does not have to stay connected.
+     * (Previously this held one PHP worker - and the browser connection - open for the whole import: 100k rows did not fit
+     * in memory or in the 600 s limit, and 6 concurrent uploads starved every other page.)
      */
     public function importEmploymentReport(Request $request)
     {
@@ -261,8 +339,9 @@ class AlumniController extends Controller
         if (!in_array($ext, ['xlsx', 'xls', 'csv'], true)) {
             return response()->json(['success' => false, 'message' => 'Please upload an .xlsx, .xls or .csv file.']);
         }
-        if ($file->getSize() > 15 * 1024 * 1024) {
-            return response()->json(['success' => false, 'message' => 'File is too large (max 15 MB).']);
+        $maxMb = (int) config('import.max_upload_mb', 40);
+        if ($file->getSize() > $maxMb * 1024 * 1024) {
+            return response()->json(['success' => false, 'message' => "File is too large (max {$maxMb} MB). Split it by year or program."]);
         }
 
         $campusId = Auth::role() === 'superadmin'
@@ -277,69 +356,119 @@ class AlumniController extends Controller
             return response()->json(['success' => false, 'message' => 'That graduation year looks wrong.']);
         }
 
-        $tmp = $file->getRealPath() ?: storage_path('app/'.$file->store('tmp'));
+        $limit = (int) config('import.max_pending_per_campus', 5);
+        if (ImportJob::pendingCount($campusId) >= $limit) {
+            return response()->json([
+                'success' => false,
+                'message' => "This campus already has {$limit} imports waiting or running. Wait for one to finish (or cancel it) before uploading another.",
+            ], 429);
+        }
 
-        $actorId = (int) Auth::user()['user_id'];
-        $actorEmail = Auth::user()['email'] ?? null;
-        $actorRole = Auth::role();
+        $stored = $file->storeAs((string) config('import.directory', 'imports'), (string) Str::uuid().'.'.$ext, 'local');
+        if (!$stored) {
+            return response()->json(['success' => false, 'message' => 'The file could not be saved on the server. Please try again.'], 500);
+        }
 
-        // Release the file-session lock — the import runs for many seconds and
-        // we don't want it holding other requests from this admin.
+        $importId = ImportJob::create([
+            'campus_id' => $campusId,
+            'uploaded_by' => (int) Auth::user()['user_id'],
+            'filename' => mb_substr($file->getClientOriginalName(), 0, 255),
+            'file_path' => $stored,
+            'file_ext' => $ext,
+            'file_size' => (int) $file->getSize(),
+            'year_graduated' => $year,
+        ]);
+
+        // The session lock is not needed any more; release it so this admin's other requests are not held.
         if (Session::isStarted()) {
             Session::save();
         }
-        @set_time_limit(600);
 
-        // Stream newline-delimited JSON: one {phase,done,total} line per
-        // progress tick, then a final {success,message,summary} line. The
-        // frontend reads xhr.responseText incrementally, so the % moves in
-        // real time on a single connection (no polling, works even on a
-        // single-process dev server).
-        return response()->stream(function () use ($tmp, $campusId, $year, $actorId, $actorEmail, $actorRole) {
-            while (ob_get_level() > 0) {
-                @ob_end_flush();
-            }
-            @ob_implicit_flush(true);
+        try {
+            ProcessEmploymentImport::dispatch($importId);   // QUEUE_CONNECTION=sync (dev): runs right here, as before
+        } catch (\Throwable $e) {
+            report($e);
+            ImportJob::fail($importId, 'Could not queue the import: '.$e->getMessage());
 
-            $emit = static function (array $data): void {
-                echo json_encode($data)."\n";
-                flush();
-            };
+            return response()->json(['success' => false, 'message' => 'The import could not be queued. Please try again.'], 500);
+        }
 
-            try {
-                $summary = (new EmploymentReportImporter())->import(
-                    $tmp,
-                    $campusId,
-                    $year,
-                    static function (array $p) use ($emit): void {
-                        $emit(['phase' => $p['phase'], 'done' => $p['done'], 'total' => $p['total']]);
-                    }
-                );
+        $row = ImportJob::find($importId);
+        $import = ImportJob::present($row);
 
-                (new AuditLog())->log(
-                    $actorId,
-                    $actorEmail,
-                    $actorRole,
-                    'import_employment_report',
-                    'alumni',
-                    null,
-                    "Imported {$summary['imported']} alumni from an employment report ({$summary['skipped']} skipped)."
-                );
+        return response()->json([
+            'success' => true,
+            'queued' => $row->status === ImportJob::QUEUED,
+            'import_id' => $importId,
+            'import' => $import,
+            'message' => $row->status === ImportJob::COMPLETED
+                ? "Imported {$import['successful_rows']} of {$import['processed_rows']} rows."
+                : 'Upload received - your import is queued and will keep running even if you close this page.',
+        ], 202);
+    }
 
-                $emit([
-                    'phase' => 'done',
-                    'success' => true,
-                    'message' => "Imported {$summary['imported']} of {$summary['graduate_rows']} graduate rows.",
-                    'summary' => $summary,
-                ]);
-            } catch (\Throwable $e) {
-                report($e);
-                $emit(['phase' => 'error', 'success' => false, 'message' => 'Import failed: '.$e->getMessage()]);
-            }
-        }, 200, [
-            'Content-Type' => 'application/x-ndjson',
-            'Cache-Control' => 'no-cache, no-store',
-            'X-Accel-Buffering' => 'no',
+    /** May the current admin see/cancel this import? (superadmin: any; admin: their own campus) */
+    private function importFor(int $id): ?object
+    {
+        $row = $id > 0 ? ImportJob::find($id) : null;
+        if (!$row) {
+            return null;
+        }
+        if (Auth::role() !== 'superadmin' && (int) $row->campus_id !== (int) Auth::campusId()) {
+            return null;
+        }
+
+        return $row;
+    }
+
+    /**
+     * Progress of one import: a single primary-key read of `import_jobs` (the worker writes it once per chunk), so polling
+     * costs the database next to nothing regardless of file size. Also releases the session lock first.
+     */
+    public function importStatus(Request $request): JsonResponse
+    {
+        if (Session::isStarted()) {
+            Session::save();
+        }
+        $row = $this->importFor((int) $request->query('id', '0'));
+        if (!$row) {
+            return response()->json(['success' => false, 'message' => 'Import not found.'], 404);
+        }
+
+        return response()->json(['success' => true, 'import' => ImportJob::present($row)]);
+    }
+
+    /** The 10 most recent imports (this campus, or every campus for a superadmin) - survives closing the browser. */
+    public function importList(): JsonResponse
+    {
+        if (Session::isStarted()) {
+            Session::save();
+        }
+        $q = DB::table('import_jobs')->orderByDesc('id')->limit(10);
+        if (Auth::role() !== 'superadmin') {
+            $q->where('campus_id', Auth::campusId());
+        }
+
+        return response()->json([
+            'success' => true,
+            'imports' => $q->get()->map(fn ($r) => ImportJob::present($r))->all(),
+        ]);
+    }
+
+    public function importCancel(Request $request): JsonResponse
+    {
+        $row = $this->importFor((int) $request->input('id', $request->query('id', '0')));
+        if (!$row) {
+            return response()->json(['success' => false, 'message' => 'Import not found.'], 404);
+        }
+        $ok = ImportJob::cancel((int) $row->id);
+        if ($ok) {
+            (new AuditLog())->log((int) Auth::user()['user_id'], Auth::user()['email'] ?? null, Auth::role(), 'cancel_import', 'alumni', null, "Cancelled import #{$row->id} ({$row->filename}).");
+        }
+
+        return response()->json([
+            'success' => $ok,
+            'message' => $ok ? 'Import cancelled. Rows already imported were kept.' : 'This import has already finished.',
         ]);
     }
 

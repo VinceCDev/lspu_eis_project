@@ -1,0 +1,58 @@
+{
+ "name": "F5mb_export_c1",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 1,
+ "overall": {
+  "n": 1,
+  "rps": 0.83,
+  "avg": 90,
+  "p50": 90,
+  "p95": 90,
+  "p99": 90,
+  "max": 90,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 0,
+  "kb": 0
+ },
+ "byLabel": {
+  "rep:fullData(export)": {
+   "n": 1,
+   "rps": 0.83,
+   "avg": 90,
+   "p50": 90,
+   "p95": 90,
+   "p99": 90,
+   "max": 90,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 0,
+   "kb": 0,
+   "perf": {
+    "db_ms_avg": 9,
+    "q_avg": 3,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 1,
+   "p50": 90,
+   "p95": 90
+  }
+ ],
+ "errBodies": [],
+ "upload_window_ms": null
+}

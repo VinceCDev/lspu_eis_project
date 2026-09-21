@@ -1,0 +1,80 @@
+{
+ "name": "L100k_search",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 2,
+ "overall": {
+  "n": 10,
+  "rps": 4.62,
+  "avg": 637,
+  "p50": 619,
+  "p95": 771,
+  "p99": 771,
+  "max": 771,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 10,
+  "kb": 24
+ },
+ "byLabel": {
+  "search:paginatedList(q)": {
+   "n": 5,
+   "rps": 2.31,
+   "avg": 716,
+   "p50": 727,
+   "p95": 771,
+   "p99": 771,
+   "max": 771,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 5,
+   "kb": 23,
+   "perf": {
+    "db_ms_avg": 678,
+    "q_avg": 6,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  },
+  "search:paginatedList(page)": {
+   "n": 5,
+   "rps": 2.31,
+   "avg": 558,
+   "p50": 584,
+   "p95": 619,
+   "p99": 619,
+   "max": 619,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 5,
+   "kb": 24,
+   "perf": {
+    "db_ms_avg": 527,
+    "q_avg": 6,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 10,
+   "p50": 619,
+   "p95": 771
+  }
+ ],
+ "errBodies": []
+}

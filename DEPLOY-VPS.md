@@ -103,7 +103,30 @@ docker compose logs -f app  # watch the bootstrap (migrate, cache). Ctrl+C to ex
 In the `app` logs, look for:
 - `Generating APP_KEY...`
 - `Migrating: ...` finishing with no errors
+- `reporting:verify OK` (every required table and index exists)
 - `Caching config / routes / views...`
+
+**A failed migration stops the deployment**: the `app` container exits with `FATAL: php artisan migrate failed`, the failed migration is
+*not* recorded as applied, and nothing else starts (the queue workers wait for `app` to become healthy). Fix the cause and run
+`docker compose up -d` again.
+
+### The stack is now 6 services, not 3
+
+| service | what it does | count |
+|---|---|---|
+| `app` | PHP-FPM (web requests), runs migrations on boot | 1 |
+| `web` | Nginx | 1 |
+| `db` | MySQL 8 | 1 |
+| `queue-imports` | Bulk alumni imports (queue `imports`). The upload only stores the file; these process it in the background | `IMPORT_WORKERS` (default **2**) |
+| `queue-summaries` | Rebuilds the Dashboard / Reports summary tables after imports / edits | 1 |
+| `scheduler` | Every minute: re-queues imports whose worker died, refreshes stale or day-old summaries; daily: deletes old uploaded files | 1 |
+
+Tune in `.env` (all optional): `IMPORT_WORKERS=2` (imports processed at the same time; extra uploads wait in the queue),
+`IMPORT_CHUNK_SIZE=1000`, `IMPORT_MAX_UPLOAD_MB=40`, `REPORTING_SUMMARY=true` (set `false` to make Dashboard/Reports use their
+original live queries again - the rollback switch). Laravel's queue table is `queue_jobs` (the app's own `jobs` table is job postings).
+
+After the FIRST deploy of this version the summary tables are empty; the entrypoint queues their build. Until a campus is built, its
+pages use the old (slow at 1M+ rows) live queries; check with `docker compose exec app php artisan reporting:verify --data`.
 
 ---
 
@@ -148,7 +171,7 @@ cd /opt/lspu-eis
 git pull
 docker compose up -d --build
 docker compose exec app php artisan migrate --force
-docker compose restart app queue scheduler
+docker compose restart app queue-imports queue-summaries scheduler
 ```
 
 (The `app` entrypoint handles `config:cache` / `route:cache` / `view:cache`.)

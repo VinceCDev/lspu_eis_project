@@ -1,0 +1,80 @@
+{
+ "name": "L100k_alumni_list_c1",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 2,
+ "overall": {
+  "n": 2,
+  "rps": 1.13,
+  "avg": 646,
+  "p50": 49,
+  "p95": 1244,
+  "p99": 1244,
+  "max": 1244,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 2,
+  "kb": 14494
+ },
+ "byLabel": {
+  "alumni:page": {
+   "n": 1,
+   "rps": 0.57,
+   "avg": 49,
+   "p50": 49,
+   "p95": 49,
+   "p99": 49,
+   "max": 49,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 72,
+   "perf": {
+    "db_ms_avg": 0,
+    "q_avg": 0,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  },
+  "alumni:list(all)": {
+   "n": 1,
+   "rps": 0.57,
+   "avg": 1244,
+   "p50": 1244,
+   "p95": 1244,
+   "p99": 1244,
+   "max": 1244,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 28916,
+   "perf": {
+    "db_ms_avg": 809,
+    "q_avg": 5,
+    "dupe_avg": 0,
+    "mem_mb_max": 230
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 2,
+   "p50": 49,
+   "p95": 1244
+  }
+ ],
+ "errBodies": []
+}

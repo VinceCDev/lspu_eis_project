@@ -1,0 +1,150 @@
+{
+ "name": "F5mb_reports_super_warm",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 3,
+ "overall": {
+  "n": 5,
+  "rps": 1.96,
+  "avg": 107,
+  "p50": 97,
+  "p95": 155,
+  "p99": 155,
+  "max": 155,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 5,
+  "kb": 17
+ },
+ "byLabel": {
+  "rep:page": {
+   "n": 1,
+   "rps": 0.39,
+   "avg": 97,
+   "p50": 97,
+   "p95": 97,
+   "p99": 97,
+   "max": 97,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 40,
+   "perf": {
+    "db_ms_avg": 0,
+    "q_avg": 0,
+    "dupe_avg": 0,
+    "mem_mb_max": 12
+   }
+  },
+  "rep:summary": {
+   "n": 1,
+   "rps": 0.39,
+   "avg": 72,
+   "p50": 72,
+   "p95": 72,
+   "p99": 72,
+   "max": 72,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 21,
+   "perf": {
+    "db_ms_avg": 3,
+    "q_avg": 1,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  },
+  "rep:colleges": {
+   "n": 1,
+   "rps": 0.39,
+   "avg": 139,
+   "p50": 139,
+   "p95": 139,
+   "p99": 139,
+   "max": 139,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 0,
+   "perf": {
+    "db_ms_avg": 21,
+    "q_avg": 4,
+    "dupe_avg": 0,
+    "mem_mb_max": 8
+   }
+  },
+  "rep:years": {
+   "n": 1,
+   "rps": 0.39,
+   "avg": 155,
+   "p50": 155,
+   "p95": 155,
+   "p99": 155,
+   "max": 155,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 0,
+   "perf": {
+    "db_ms_avg": 12,
+    "q_avg": 4,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  },
+  "rep:summary(filter year)": {
+   "n": 1,
+   "rps": 0.39,
+   "avg": 72,
+   "p50": 72,
+   "p95": 72,
+   "p99": 72,
+   "max": 72,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 21,
+   "perf": {
+    "db_ms_avg": 2,
+    "q_avg": 1,
+    "dupe_avg": 0,
+    "mem_mb_max": 6
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 5,
+   "p50": 97,
+   "p95": 155
+  }
+ ],
+ "errBodies": [],
+ "upload_window_ms": null
+}

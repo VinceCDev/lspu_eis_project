@@ -7,7 +7,10 @@ class GeminiClient
 {
     public function generate(string $prompt): string
     {
-        $apiKey = env('GEMINI_API_KEY', '');
+        $apiKey = trim((string) env('GEMINI_API_KEY', ''));
+        if ($apiKey === '') {
+            return '';   // not configured: callers already fall back to the local classifier; don't make a pointless (403) network call per row/report
+        }
         $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent';
 
         $data = ['contents' => [['parts' => [['text' => $prompt]]]]];

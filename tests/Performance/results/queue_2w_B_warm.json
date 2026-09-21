@@ -1,0 +1,4013 @@
+{
+ "name": "queue_2w_B_warm",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 317,
+ "overall": {
+  "n": 11569,
+  "rps": 36.46,
+  "avg": 212,
+  "p50": 65,
+  "p95": 506,
+  "p99": 4234,
+  "max": 12480,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 11569,
+  "kb": 23
+ },
+ "byLabel": {
+  "dash:page": {
+   "n": 1335,
+   "rps": 4.21,
+   "avg": 91,
+   "p50": 57,
+   "p95": 161,
+   "p99": 257,
+   "max": 6916,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1335,
+   "kb": 41
+  },
+  "dash:employmentStatusByCampus": {
+   "n": 1335,
+   "rps": 4.21,
+   "avg": 150,
+   "p50": 65,
+   "p95": 183,
+   "p99": 3261,
+   "max": 9389,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1335,
+   "kb": 15
+  },
+  "loc:alumniAtLocation": {
+   "n": 304,
+   "rps": 0.96,
+   "avg": 556,
+   "p50": 428,
+   "p95": 1454,
+   "p99": 2446,
+   "max": 8350,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 304,
+   "kb": 7
+  },
+  "rep:page": {
+   "n": 533,
+   "rps": 1.68,
+   "avg": 108,
+   "p50": 59,
+   "p95": 158,
+   "p99": 298,
+   "max": 6291,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 533,
+   "kb": 39
+  },
+  "dash:stats": {
+   "n": 1335,
+   "rps": 4.21,
+   "avg": 116,
+   "p50": 65,
+   "p95": 186,
+   "p99": 911,
+   "max": 8688,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1335,
+   "kb": 33
+  },
+  "rep:colleges": {
+   "n": 533,
+   "rps": 1.68,
+   "avg": 110,
+   "p50": 72,
+   "p95": 178,
+   "p99": 290,
+   "max": 4989,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 533,
+   "kb": 0
+  },
+  "nav:profile": {
+   "n": 660,
+   "rps": 2.08,
+   "avg": 149,
+   "p50": 56,
+   "p95": 161,
+   "p99": 4250,
+   "max": 6055,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 660,
+   "kb": 0
+  },
+  "rep:years": {
+   "n": 533,
+   "rps": 1.68,
+   "avg": 219,
+   "p50": 71,
+   "p95": 215,
+   "p99": 5866,
+   "max": 9252,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 533,
+   "kb": 0
+  },
+  "nav:settings": {
+   "n": 660,
+   "rps": 2.08,
+   "avg": 90,
+   "p50": 56,
+   "p95": 154,
+   "p99": 803,
+   "max": 3362,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 660,
+   "kb": 31
+  },
+  "rep:summary": {
+   "n": 533,
+   "rps": 1.68,
+   "avg": 263,
+   "p50": 72,
+   "p95": 283,
+   "p99": 6216,
+   "max": 9273,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 533,
+   "kb": 18
+  },
+  "search:paginatedList(q)": {
+   "n": 310,
+   "rps": 0.98,
+   "avg": 2424,
+   "p50": 2207,
+   "p95": 6311,
+   "p99": 9825,
+   "max": 12480,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 310,
+   "kb": 16
+  },
+  "dash:courseWorkAlignment": {
+   "n": 1335,
+   "rps": 4.21,
+   "avg": 247,
+   "p50": 68,
+   "p95": 239,
+   "p99": 6154,
+   "max": 9511,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1335,
+   "kb": 20
+  },
+  "nav:notification": {
+   "n": 660,
+   "rps": 2.08,
+   "avg": 82,
+   "p50": 56,
+   "p95": 150,
+   "p99": 267,
+   "max": 4299,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 660,
+   "kb": 28
+  },
+  "search:paginatedList(page)": {
+   "n": 310,
+   "rps": 0.98,
+   "avg": 120,
+   "p50": 101,
+   "p95": 245,
+   "p99": 396,
+   "max": 553,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 310,
+   "kb": 24
+  },
+  "nav:user": {
+   "n": 660,
+   "rps": 2.08,
+   "avg": 77,
+   "p50": 54,
+   "p95": 141,
+   "p99": 217,
+   "max": 4094,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 660,
+   "kb": 49
+  },
+  "rep:summary(filter year)": {
+   "n": 533,
+   "rps": 1.68,
+   "avg": 107,
+   "p50": 57,
+   "p95": 342,
+   "p99": 871,
+   "max": 2893,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 533,
+   "kb": 17
+  }
+ },
+ "uploads": [
+  {
+   "acct": 6,
+   "file": "c6_100k.xlsx",
+   "bytes": 7589359,
+   "t0": 248,
+   "progress": [
+    [
+     502,
+     "queued",
+     0,
+     0
+    ],
+    [
+     2550,
+     "processing",
+     2000,
+     0
+    ],
+    [
+     4734,
+     "processing",
+     5000,
+     0
+    ],
+    [
+     6814,
+     "processing",
+     8000,
+     0
+    ],
+    [
+     12722,
+     "processing",
+     18000,
+     0
+    ],
+    [
+     14855,
+     "processing",
+     20000,
+     0
+    ],
+    [
+     16898,
+     "processing",
+     24000,
+     0
+    ],
+    [
+     18955,
+     "processing",
+     27000,
+     0
+    ],
+    [
+     20993,
+     "processing",
+     30000,
+     0
+    ],
+    [
+     23039,
+     "processing",
+     33000,
+     0
+    ],
+    [
+     25084,
+     "processing",
+     36000,
+     0
+    ],
+    [
+     27201,
+     "processing",
+     40000,
+     0
+    ],
+    [
+     29248,
+     "processing",
+     43000,
+     0
+    ],
+    [
+     31296,
+     "processing",
+     46000,
+     0
+    ],
+    [
+     33333,
+     "processing",
+     49000,
+     0
+    ],
+    [
+     35374,
+     "processing",
+     52000,
+     0
+    ],
+    [
+     37457,
+     "processing",
+     55000,
+     0
+    ],
+    [
+     39540,
+     "processing",
+     58000,
+     0
+    ],
+    [
+     41633,
+     "processing",
+     61000,
+     0
+    ],
+    [
+     43722,
+     "processing",
+     63000,
+     0
+    ],
+    [
+     45800,
+     "processing",
+     66000,
+     0
+    ],
+    [
+     47859,
+     "processing",
+     68000,
+     0
+    ],
+    [
+     49887,
+     "processing",
+     71000,
+     0
+    ],
+    [
+     51929,
+     "processing",
+     74000,
+     0
+    ],
+    [
+     54004,
+     "processing",
+     76000,
+     0
+    ],
+    [
+     56039,
+     "processing",
+     80000,
+     0
+    ],
+    [
+     58108,
+     "processing",
+     83000,
+     0
+    ],
+    [
+     60138,
+     "processing",
+     85000,
+     0
+    ],
+    [
+     62186,
+     "processing",
+     88000,
+     0
+    ],
+    [
+     64219,
+     "processing",
+     91000,
+     0
+    ],
+    [
+     66328,
+     "processing",
+     93000,
+     0
+    ],
+    [
+     68377,
+     "processing",
+     96000,
+     0
+    ],
+    [
+     70415,
+     "processing",
+     99000,
+     0
+    ],
+    [
+     72454,
+     "completed",
+     100000,
+     0
+    ]
+   ],
+   "final": {
+    "id": 2,
+    "campus_id": 12,
+    "filename": "c6_100k.xlsx",
+    "status": "completed",
+    "total_rows": 0,
+    "processed_rows": 100000,
+    "successful_rows": 100000,
+    "failed_rows": 0,
+    "percent": 100,
+    "attempts": 1,
+    "queue_position": 0,
+    "error_message": null,
+    "created_at": "2026-09-21 14:23:12",
+    "started_at": "2026-09-21 14:23:13",
+    "completed_at": "2026-09-21 14:24:23",
+    "failed_at": null,
+    "summary": {
+     "graduate_rows": 100000,
+     "imported": 100000,
+     "skipped": 0,
+     "placeholder_emails": 39987,
+     "experience_rows": 83245,
+     "emailed": 0,
+     "sheets": {
+      "Graduates": "100000 graduate rows"
+     },
+     "warnings": [],
+     "errors": [],
+     "skipped_details": [],
+     "samples": []
+    },
+    "success": true,
+    "phase": "completed"
+   },
+   "http": 202,
+   "err": null,
+   "post_ms": 500,
+   "import_id": 2,
+   "started_ms": 2550,
+   "ms": 72454,
+   "rows_done_when_ended": 100000,
+   "queue_wait_ms": 2550,
+   "processing_ms": 69904
+  },
+  {
+   "acct": 1,
+   "file": "c1_100k.xlsx",
+   "bytes": 7588993,
+   "t0": 267,
+   "progress": [
+    [
+     434,
+     "queued",
+     0,
+     0
+    ],
+    [
+     2470,
+     "processing",
+     3000,
+     0
+    ],
+    [
+     4511,
+     "processing",
+     6000,
+     0
+    ],
+    [
+     6555,
+     "processing",
+     9000,
+     0
+    ],
+    [
+     8598,
+     "processing",
+     13000,
+     0
+    ],
+    [
+     10652,
+     "processing",
+     16000,
+     0
+    ],
+    [
+     12679,
+     "processing",
+     19000,
+     0
+    ],
+    [
+     14733,
+     "processing",
+     22000,
+     0
+    ],
+    [
+     16771,
+     "processing",
+     25000,
+     0
+    ],
+    [
+     18841,
+     "processing",
+     28000,
+     0
+    ],
+    [
+     20887,
+     "processing",
+     31000,
+     0
+    ],
+    [
+     22925,
+     "processing",
+     34000,
+     0
+    ],
+    [
+     24969,
+     "processing",
+     38000,
+     0
+    ],
+    [
+     27024,
+     "processing",
+     41000,
+     0
+    ],
+    [
+     29058,
+     "processing",
+     44000,
+     0
+    ],
+    [
+     31139,
+     "processing",
+     47000,
+     0
+    ],
+    [
+     33168,
+     "processing",
+     50000,
+     0
+    ],
+    [
+     35200,
+     "processing",
+     53000,
+     0
+    ],
+    [
+     37237,
+     "processing",
+     56000,
+     0
+    ],
+    [
+     39276,
+     "processing",
+     59000,
+     0
+    ],
+    [
+     41304,
+     "processing",
+     62000,
+     0
+    ],
+    [
+     43440,
+     "processing",
+     64000,
+     0
+    ],
+    [
+     45475,
+     "processing",
+     66000,
+     0
+    ],
+    [
+     47535,
+     "processing",
+     69000,
+     0
+    ],
+    [
+     49596,
+     "processing",
+     72000,
+     0
+    ],
+    [
+     51661,
+     "processing",
+     75000,
+     0
+    ],
+    [
+     53743,
+     "processing",
+     78000,
+     0
+    ],
+    [
+     55810,
+     "processing",
+     81000,
+     0
+    ],
+    [
+     57870,
+     "processing",
+     84000,
+     0
+    ],
+    [
+     59918,
+     "processing",
+     86000,
+     0
+    ],
+    [
+     61963,
+     "processing",
+     89000,
+     0
+    ],
+    [
+     64014,
+     "processing",
+     92000,
+     0
+    ],
+    [
+     66075,
+     "processing",
+     95000,
+     0
+    ],
+    [
+     68135,
+     "processing",
+     98000,
+     0
+    ],
+    [
+     70164,
+     "completed",
+     100000,
+     0
+    ]
+   ],
+   "final": {
+    "id": 1,
+    "campus_id": 7,
+    "filename": "c1_100k.xlsx",
+    "status": "completed",
+    "total_rows": 0,
+    "processed_rows": 100000,
+    "successful_rows": 100000,
+    "failed_rows": 0,
+    "percent": 100,
+    "attempts": 1,
+    "queue_position": 0,
+    "error_message": null,
+    "created_at": "2026-09-21 14:23:12",
+    "started_at": "2026-09-21 14:23:12",
+    "completed_at": "2026-09-21 14:24:22",
+    "failed_at": null,
+    "summary": {
+     "graduate_rows": 100000,
+     "imported": 100000,
+     "skipped": 0,
+     "placeholder_emails": 40032,
+     "experience_rows": 83382,
+     "emailed": 0,
+     "sheets": {
+      "Graduates": "100000 graduate rows"
+     },
+     "warnings": [],
+     "errors": [],
+     "skipped_details": [],
+     "samples": []
+    },
+    "success": true,
+    "phase": "completed"
+   },
+   "http": 202,
+   "err": null,
+   "post_ms": 432,
+   "import_id": 1,
+   "started_ms": 2470,
+   "ms": 70164,
+   "rows_done_when_ended": 100000,
+   "queue_wait_ms": 2470,
+   "processing_ms": 67694
+  },
+  {
+   "acct": 2,
+   "file": "c2_100k.xlsx",
+   "bytes": 7587508,
+   "t0": 297,
+   "progress": [
+    [
+     468,
+     "queued",
+     0,
+     0
+    ],
+    [
+     2510,
+     "queued",
+     0,
+     0
+    ],
+    [
+     4701,
+     "queued",
+     0,
+     0
+    ],
+    [
+     6767,
+     "queued",
+     0,
+     0
+    ],
+    [
+     12823,
+     "queued",
+     0,
+     0
+    ],
+    [
+     14879,
+     "queued",
+     0,
+     0
+    ],
+    [
+     16938,
+     "queued",
+     0,
+     0
+    ],
+    [
+     19001,
+     "queued",
+     0,
+     0
+    ],
+    [
+     21043,
+     "queued",
+     0,
+     0
+    ],
+    [
+     23074,
+     "queued",
+     0,
+     0
+    ],
+    [
+     25125,
+     "queued",
+     0,
+     0
+    ],
+    [
+     27196,
+     "queued",
+     0,
+     0
+    ],
+    [
+     29239,
+     "queued",
+     0,
+     0
+    ],
+    [
+     31277,
+     "queued",
+     0,
+     0
+    ],
+    [
+     33307,
+     "queued",
+     0,
+     0
+    ],
+    [
+     35340,
+     "queued",
+     0,
+     0
+    ],
+    [
+     37407,
+     "queued",
+     0,
+     0
+    ],
+    [
+     39621,
+     "queued",
+     0,
+     0
+    ],
+    [
+     41765,
+     "queued",
+     0,
+     0
+    ],
+    [
+     43811,
+     "queued",
+     0,
+     0
+    ],
+    [
+     46047,
+     "queued",
+     0,
+     0
+    ],
+    [
+     48124,
+     "queued",
+     0,
+     0
+    ],
+    [
+     50157,
+     "queued",
+     0,
+     0
+    ],
+    [
+     52184,
+     "queued",
+     0,
+     0
+    ],
+    [
+     54280,
+     "queued",
+     0,
+     0
+    ],
+    [
+     56380,
+     "queued",
+     0,
+     0
+    ],
+    [
+     58451,
+     "queued",
+     0,
+     0
+    ],
+    [
+     60487,
+     "queued",
+     0,
+     0
+    ],
+    [
+     62522,
+     "queued",
+     0,
+     0
+    ],
+    [
+     64572,
+     "queued",
+     0,
+     0
+    ],
+    [
+     66613,
+     "queued",
+     0,
+     0
+    ],
+    [
+     68672,
+     "queued",
+     0,
+     0
+    ],
+    [
+     70788,
+     "processing",
+     1000,
+     0
+    ],
+    [
+     72849,
+     "processing",
+     3000,
+     0
+    ],
+    [
+     74898,
+     "processing",
+     6000,
+     0
+    ],
+    [
+     76934,
+     "processing",
+     8000,
+     0
+    ],
+    [
+     78987,
+     "processing",
+     10000,
+     0
+    ],
+    [
+     81126,
+     "processing",
+     13000,
+     0
+    ],
+    [
+     83253,
+     "processing",
+     15000,
+     0
+    ],
+    [
+     85302,
+     "processing",
+     17000,
+     0
+    ],
+    [
+     87346,
+     "processing",
+     19000,
+     0
+    ],
+    [
+     89377,
+     "processing",
+     21000,
+     0
+    ],
+    [
+     91432,
+     "processing",
+     23000,
+     0
+    ],
+    [
+     93478,
+     "processing",
+     25000,
+     0
+    ],
+    [
+     95520,
+     "processing",
+     27000,
+     0
+    ],
+    [
+     97558,
+     "processing",
+     29000,
+     0
+    ],
+    [
+     99591,
+     "processing",
+     32000,
+     0
+    ],
+    [
+     101646,
+     "processing",
+     34000,
+     0
+    ],
+    [
+     103686,
+     "processing",
+     36000,
+     0
+    ],
+    [
+     105727,
+     "processing",
+     38000,
+     0
+    ],
+    [
+     107797,
+     "processing",
+     41000,
+     0
+    ],
+    [
+     109824,
+     "processing",
+     43000,
+     0
+    ],
+    [
+     111979,
+     "processing",
+     45000,
+     0
+    ],
+    [
+     114027,
+     "processing",
+     47000,
+     0
+    ],
+    [
+     116068,
+     "processing",
+     50000,
+     0
+    ],
+    [
+     118130,
+     "processing",
+     52000,
+     0
+    ],
+    [
+     120184,
+     "processing",
+     54000,
+     0
+    ],
+    [
+     122223,
+     "processing",
+     56000,
+     0
+    ],
+    [
+     124308,
+     "processing",
+     58000,
+     0
+    ],
+    [
+     126362,
+     "processing",
+     60000,
+     0
+    ],
+    [
+     128436,
+     "processing",
+     63000,
+     0
+    ],
+    [
+     130498,
+     "processing",
+     64000,
+     0
+    ],
+    [
+     132544,
+     "processing",
+     67000,
+     0
+    ],
+    [
+     134590,
+     "processing",
+     69000,
+     0
+    ],
+    [
+     136656,
+     "processing",
+     71000,
+     0
+    ],
+    [
+     138786,
+     "processing",
+     73000,
+     0
+    ],
+    [
+     140845,
+     "processing",
+     76000,
+     0
+    ],
+    [
+     142929,
+     "processing",
+     78000,
+     0
+    ],
+    [
+     144963,
+     "processing",
+     80000,
+     0
+    ],
+    [
+     147004,
+     "processing",
+     82000,
+     0
+    ],
+    [
+     149060,
+     "processing",
+     85000,
+     0
+    ],
+    [
+     151107,
+     "processing",
+     86000,
+     0
+    ],
+    [
+     153139,
+     "processing",
+     87000,
+     0
+    ],
+    [
+     155183,
+     "processing",
+     90000,
+     0
+    ],
+    [
+     157243,
+     "processing",
+     92000,
+     0
+    ],
+    [
+     159318,
+     "processing",
+     94000,
+     0
+    ],
+    [
+     161359,
+     "processing",
+     96000,
+     0
+    ],
+    [
+     163413,
+     "processing",
+     98000,
+     0
+    ],
+    [
+     165496,
+     "processing",
+     99000,
+     0
+    ],
+    [
+     167533,
+     "completed",
+     100000,
+     0
+    ]
+   ],
+   "final": {
+    "id": 3,
+    "campus_id": 8,
+    "filename": "c2_100k.xlsx",
+    "status": "completed",
+    "total_rows": 0,
+    "processed_rows": 100000,
+    "successful_rows": 100000,
+    "failed_rows": 0,
+    "percent": 100,
+    "attempts": 1,
+    "queue_position": 0,
+    "error_message": null,
+    "created_at": "2026-09-21 14:23:12",
+    "started_at": "2026-09-21 14:24:22",
+    "completed_at": "2026-09-21 14:25:58",
+    "failed_at": null,
+    "summary": {
+     "graduate_rows": 100000,
+     "imported": 100000,
+     "skipped": 0,
+     "placeholder_emails": 40134,
+     "experience_rows": 83207,
+     "emailed": 0,
+     "sheets": {
+      "Graduates": "100000 graduate rows"
+     },
+     "warnings": [],
+     "errors": [],
+     "skipped_details": [],
+     "samples": []
+    },
+    "success": true,
+    "phase": "completed"
+   },
+   "http": 202,
+   "err": null,
+   "post_ms": 466,
+   "import_id": 3,
+   "started_ms": 70788,
+   "ms": 167533,
+   "rows_done_when_ended": 100000,
+   "queue_wait_ms": 70788,
+   "processing_ms": 96745
+  },
+  {
+   "acct": 5,
+   "file": "c5_100k.xlsx",
+   "bytes": 7589380,
+   "t0": 375,
+   "progress": [
+    [
+     446,
+     "queued",
+     0,
+     0
+    ],
+    [
+     2481,
+     "queued",
+     0,
+     0
+    ],
+    [
+     4616,
+     "queued",
+     0,
+     0
+    ],
+    [
+     6644,
+     "queued",
+     0,
+     0
+    ],
+    [
+     8725,
+     "queued",
+     0,
+     0
+    ],
+    [
+     10785,
+     "queued",
+     0,
+     0
+    ],
+    [
+     12859,
+     "queued",
+     0,
+     0
+    ],
+    [
+     14919,
+     "queued",
+     0,
+     0
+    ],
+    [
+     17024,
+     "queued",
+     0,
+     0
+    ],
+    [
+     19074,
+     "queued",
+     0,
+     0
+    ],
+    [
+     21123,
+     "queued",
+     0,
+     0
+    ],
+    [
+     23160,
+     "queued",
+     0,
+     0
+    ],
+    [
+     25199,
+     "queued",
+     0,
+     0
+    ],
+    [
+     27273,
+     "queued",
+     0,
+     0
+    ],
+    [
+     29318,
+     "queued",
+     0,
+     0
+    ],
+    [
+     31425,
+     "queued",
+     0,
+     0
+    ],
+    [
+     33486,
+     "queued",
+     0,
+     0
+    ],
+    [
+     35524,
+     "queued",
+     0,
+     0
+    ],
+    [
+     37590,
+     "queued",
+     0,
+     0
+    ],
+    [
+     39689,
+     "queued",
+     0,
+     0
+    ],
+    [
+     41803,
+     "queued",
+     0,
+     0
+    ],
+    [
+     43983,
+     "queued",
+     0,
+     0
+    ],
+    [
+     46062,
+     "queued",
+     0,
+     0
+    ],
+    [
+     48097,
+     "queued",
+     0,
+     0
+    ],
+    [
+     50148,
+     "queued",
+     0,
+     0
+    ],
+    [
+     52179,
+     "queued",
+     0,
+     0
+    ],
+    [
+     54258,
+     "queued",
+     0,
+     0
+    ],
+    [
+     56333,
+     "queued",
+     0,
+     0
+    ],
+    [
+     58460,
+     "queued",
+     0,
+     0
+    ],
+    [
+     60510,
+     "queued",
+     0,
+     0
+    ],
+    [
+     62578,
+     "queued",
+     0,
+     0
+    ],
+    [
+     64622,
+     "queued",
+     0,
+     0
+    ],
+    [
+     66657,
+     "queued",
+     0,
+     0
+    ],
+    [
+     68702,
+     "queued",
+     0,
+     0
+    ],
+    [
+     70779,
+     "processing",
+     0,
+     0
+    ],
+    [
+     72810,
+     "processing",
+     2000,
+     0
+    ],
+    [
+     74844,
+     "processing",
+     4000,
+     0
+    ],
+    [
+     76895,
+     "processing",
+     6000,
+     0
+    ],
+    [
+     78953,
+     "processing",
+     8000,
+     0
+    ],
+    [
+     81019,
+     "processing",
+     11000,
+     0
+    ],
+    [
+     83151,
+     "processing",
+     13000,
+     0
+    ],
+    [
+     85202,
+     "processing",
+     14000,
+     0
+    ],
+    [
+     87281,
+     "processing",
+     16000,
+     0
+    ],
+    [
+     89355,
+     "processing",
+     18000,
+     0
+    ],
+    [
+     91406,
+     "processing",
+     21000,
+     0
+    ],
+    [
+     93450,
+     "processing",
+     23000,
+     0
+    ],
+    [
+     95499,
+     "processing",
+     25000,
+     0
+    ],
+    [
+     97549,
+     "processing",
+     27000,
+     0
+    ],
+    [
+     99701,
+     "processing",
+     30000,
+     0
+    ],
+    [
+     101769,
+     "processing",
+     32000,
+     0
+    ],
+    [
+     103813,
+     "processing",
+     34000,
+     0
+    ],
+    [
+     105873,
+     "processing",
+     36000,
+     0
+    ],
+    [
+     107940,
+     "processing",
+     39000,
+     0
+    ],
+    [
+     110000,
+     "processing",
+     41000,
+     0
+    ],
+    [
+     112038,
+     "processing",
+     43000,
+     0
+    ],
+    [
+     114079,
+     "processing",
+     45000,
+     0
+    ],
+    [
+     116162,
+     "processing",
+     48000,
+     0
+    ],
+    [
+     118196,
+     "processing",
+     50000,
+     0
+    ],
+    [
+     120322,
+     "processing",
+     52000,
+     0
+    ],
+    [
+     122355,
+     "processing",
+     54000,
+     0
+    ],
+    [
+     124395,
+     "processing",
+     56000,
+     0
+    ],
+    [
+     126490,
+     "processing",
+     58000,
+     0
+    ],
+    [
+     128567,
+     "processing",
+     61000,
+     0
+    ],
+    [
+     130601,
+     "processing",
+     62000,
+     0
+    ],
+    [
+     132702,
+     "processing",
+     65000,
+     0
+    ],
+    [
+     134784,
+     "processing",
+     67000,
+     0
+    ],
+    [
+     136918,
+     "processing",
+     70000,
+     0
+    ],
+    [
+     138992,
+     "processing",
+     72000,
+     0
+    ],
+    [
+     141075,
+     "processing",
+     75000,
+     0
+    ],
+    [
+     143169,
+     "processing",
+     76000,
+     0
+    ],
+    [
+     145208,
+     "processing",
+     79000,
+     0
+    ],
+    [
+     147300,
+     "processing",
+     81000,
+     0
+    ],
+    [
+     149365,
+     "processing",
+     83000,
+     0
+    ],
+    [
+     151409,
+     "processing",
+     85000,
+     0
+    ],
+    [
+     153455,
+     "processing",
+     87000,
+     0
+    ],
+    [
+     155515,
+     "processing",
+     90000,
+     0
+    ],
+    [
+     157556,
+     "processing",
+     92000,
+     0
+    ],
+    [
+     159641,
+     "processing",
+     94000,
+     0
+    ],
+    [
+     161676,
+     "processing",
+     95000,
+     0
+    ],
+    [
+     163744,
+     "processing",
+     97000,
+     0
+    ],
+    [
+     165807,
+     "processing",
+     99000,
+     0
+    ],
+    [
+     167852,
+     "completed",
+     100000,
+     0
+    ]
+   ],
+   "final": {
+    "id": 4,
+    "campus_id": 11,
+    "filename": "c5_100k.xlsx",
+    "status": "completed",
+    "total_rows": 0,
+    "processed_rows": 100000,
+    "successful_rows": 100000,
+    "failed_rows": 0,
+    "percent": 100,
+    "attempts": 1,
+    "queue_position": 0,
+    "error_message": null,
+    "created_at": "2026-09-21 14:23:12",
+    "started_at": "2026-09-21 14:24:23",
+    "completed_at": "2026-09-21 14:25:59",
+    "failed_at": null,
+    "summary": {
+     "graduate_rows": 100000,
+     "imported": 100000,
+     "skipped": 0,
+     "placeholder_emails": 40097,
+     "experience_rows": 83244,
+     "emailed": 0,
+     "sheets": {
+      "Graduates": "100000 graduate rows"
+     },
+     "warnings": [],
+     "errors": [],
+     "skipped_details": [],
+     "samples": []
+    },
+    "success": true,
+    "phase": "completed"
+   },
+   "http": 202,
+   "err": null,
+   "post_ms": 444,
+   "import_id": 4,
+   "started_ms": 70779,
+   "ms": 167852,
+   "rows_done_when_ended": 100000,
+   "queue_wait_ms": 70779,
+   "processing_ms": 97073
+  },
+  {
+   "acct": 4,
+   "file": "c4_100k.xlsx",
+   "bytes": 7588654,
+   "t0": 556,
+   "progress": [
+    [
+     6492,
+     "queued",
+     0,
+     0
+    ],
+    [
+     8580,
+     "queued",
+     0,
+     0
+    ],
+    [
+     10624,
+     "queued",
+     0,
+     0
+    ],
+    [
+     12668,
+     "queued",
+     0,
+     0
+    ],
+    [
+     14724,
+     "queued",
+     0,
+     0
+    ],
+    [
+     16824,
+     "queued",
+     0,
+     0
+    ],
+    [
+     18894,
+     "queued",
+     0,
+     0
+    ],
+    [
+     21002,
+     "queued",
+     0,
+     0
+    ],
+    [
+     23029,
+     "queued",
+     0,
+     0
+    ],
+    [
+     25078,
+     "queued",
+     0,
+     0
+    ],
+    [
+     27116,
+     "queued",
+     0,
+     0
+    ],
+    [
+     29156,
+     "queued",
+     0,
+     0
+    ],
+    [
+     31239,
+     "queued",
+     0,
+     0
+    ],
+    [
+     33287,
+     "queued",
+     0,
+     0
+    ],
+    [
+     35334,
+     "queued",
+     0,
+     0
+    ],
+    [
+     37385,
+     "queued",
+     0,
+     0
+    ],
+    [
+     39473,
+     "queued",
+     0,
+     0
+    ],
+    [
+     41554,
+     "queued",
+     0,
+     0
+    ],
+    [
+     43602,
+     "queued",
+     0,
+     0
+    ],
+    [
+     45745,
+     "queued",
+     0,
+     0
+    ],
+    [
+     48041,
+     "queued",
+     0,
+     0
+    ],
+    [
+     50096,
+     "queued",
+     0,
+     0
+    ],
+    [
+     52211,
+     "queued",
+     0,
+     0
+    ],
+    [
+     54252,
+     "queued",
+     0,
+     0
+    ],
+    [
+     56312,
+     "queued",
+     0,
+     0
+    ],
+    [
+     58399,
+     "queued",
+     0,
+     0
+    ],
+    [
+     60486,
+     "queued",
+     0,
+     0
+    ],
+    [
+     62520,
+     "queued",
+     0,
+     0
+    ],
+    [
+     64580,
+     "queued",
+     0,
+     0
+    ],
+    [
+     66644,
+     "queued",
+     0,
+     0
+    ],
+    [
+     68737,
+     "queued",
+     0,
+     0
+    ],
+    [
+     70796,
+     "queued",
+     0,
+     0
+    ],
+    [
+     72876,
+     "queued",
+     0,
+     0
+    ],
+    [
+     74970,
+     "queued",
+     0,
+     0
+    ],
+    [
+     77058,
+     "queued",
+     0,
+     0
+    ],
+    [
+     79110,
+     "queued",
+     0,
+     0
+    ],
+    [
+     81149,
+     "queued",
+     0,
+     0
+    ],
+    [
+     83204,
+     "queued",
+     0,
+     0
+    ],
+    [
+     85273,
+     "queued",
+     0,
+     0
+    ],
+    [
+     87327,
+     "queued",
+     0,
+     0
+    ],
+    [
+     89375,
+     "queued",
+     0,
+     0
+    ],
+    [
+     91421,
+     "queued",
+     0,
+     0
+    ],
+    [
+     93480,
+     "queued",
+     0,
+     0
+    ],
+    [
+     95562,
+     "queued",
+     0,
+     0
+    ],
+    [
+     97603,
+     "queued",
+     0,
+     0
+    ],
+    [
+     99701,
+     "queued",
+     0,
+     0
+    ],
+    [
+     101776,
+     "queued",
+     0,
+     0
+    ],
+    [
+     103819,
+     "queued",
+     0,
+     0
+    ],
+    [
+     105887,
+     "queued",
+     0,
+     0
+    ],
+    [
+     107953,
+     "queued",
+     0,
+     0
+    ],
+    [
+     109991,
+     "queued",
+     0,
+     0
+    ],
+    [
+     112079,
+     "queued",
+     0,
+     0
+    ],
+    [
+     114214,
+     "queued",
+     0,
+     0
+    ],
+    [
+     116279,
+     "queued",
+     0,
+     0
+    ],
+    [
+     118343,
+     "queued",
+     0,
+     0
+    ],
+    [
+     120411,
+     "queued",
+     0,
+     0
+    ],
+    [
+     122451,
+     "queued",
+     0,
+     0
+    ],
+    [
+     124479,
+     "queued",
+     0,
+     0
+    ],
+    [
+     126514,
+     "queued",
+     0,
+     0
+    ],
+    [
+     128729,
+     "queued",
+     0,
+     0
+    ],
+    [
+     130767,
+     "queued",
+     0,
+     0
+    ],
+    [
+     132820,
+     "queued",
+     0,
+     0
+    ],
+    [
+     134882,
+     "queued",
+     0,
+     0
+    ],
+    [
+     136951,
+     "queued",
+     0,
+     0
+    ],
+    [
+     139003,
+     "queued",
+     0,
+     0
+    ],
+    [
+     141074,
+     "queued",
+     0,
+     0
+    ],
+    [
+     143136,
+     "queued",
+     0,
+     0
+    ],
+    [
+     145200,
+     "queued",
+     0,
+     0
+    ],
+    [
+     147355,
+     "queued",
+     0,
+     0
+    ],
+    [
+     149471,
+     "queued",
+     0,
+     0
+    ],
+    [
+     151512,
+     "queued",
+     0,
+     0
+    ],
+    [
+     153573,
+     "queued",
+     0,
+     0
+    ],
+    [
+     155640,
+     "queued",
+     0,
+     0
+    ],
+    [
+     157691,
+     "queued",
+     0,
+     0
+    ],
+    [
+     159760,
+     "queued",
+     0,
+     0
+    ],
+    [
+     161886,
+     "queued",
+     0,
+     0
+    ],
+    [
+     163995,
+     "queued",
+     0,
+     0
+    ],
+    [
+     166211,
+     "queued",
+     0,
+     0
+    ],
+    [
+     168245,
+     "processing",
+     2000,
+     0
+    ],
+    [
+     170292,
+     "processing",
+     4000,
+     0
+    ],
+    [
+     172355,
+     "processing",
+     5000,
+     0
+    ],
+    [
+     174450,
+     "processing",
+     8000,
+     0
+    ],
+    [
+     176534,
+     "processing",
+     10000,
+     0
+    ],
+    [
+     178581,
+     "processing",
+     11000,
+     0
+    ],
+    [
+     180633,
+     "processing",
+     14000,
+     0
+    ],
+    [
+     182667,
+     "processing",
+     16000,
+     0
+    ],
+    [
+     184695,
+     "processing",
+     17000,
+     0
+    ],
+    [
+     186729,
+     "processing",
+     19000,
+     0
+    ],
+    [
+     188767,
+     "processing",
+     21000,
+     0
+    ],
+    [
+     190796,
+     "processing",
+     22000,
+     0
+    ],
+    [
+     192821,
+     "processing",
+     24000,
+     0
+    ],
+    [
+     194893,
+     "processing",
+     27000,
+     0
+    ],
+    [
+     197013,
+     "processing",
+     28000,
+     0
+    ],
+    [
+     199102,
+     "processing",
+     30000,
+     0
+    ],
+    [
+     201163,
+     "processing",
+     31000,
+     0
+    ],
+    [
+     203271,
+     "processing",
+     33000,
+     0
+    ],
+    [
+     205331,
+     "processing",
+     35000,
+     0
+    ],
+    [
+     207380,
+     "processing",
+     36000,
+     0
+    ],
+    [
+     209430,
+     "processing",
+     37000,
+     0
+    ],
+    [
+     211545,
+     "processing",
+     38000,
+     0
+    ],
+    [
+     213631,
+     "processing",
+     40000,
+     0
+    ],
+    [
+     215689,
+     "processing",
+     42000,
+     0
+    ],
+    [
+     217749,
+     "processing",
+     43000,
+     0
+    ],
+    [
+     219820,
+     "processing",
+     45000,
+     0
+    ],
+    [
+     221901,
+     "processing",
+     46000,
+     0
+    ],
+    [
+     224063,
+     "processing",
+     46000,
+     0
+    ],
+    [
+     226137,
+     "processing",
+     48000,
+     0
+    ],
+    [
+     228231,
+     "processing",
+     50000,
+     0
+    ],
+    [
+     230378,
+     "processing",
+     51000,
+     0
+    ],
+    [
+     232670,
+     "processing",
+     52000,
+     0
+    ],
+    [
+     234797,
+     "processing",
+     53000,
+     0
+    ],
+    [
+     236929,
+     "processing",
+     54000,
+     0
+    ],
+    [
+     239043,
+     "processing",
+     55000,
+     0
+    ],
+    [
+     241128,
+     "processing",
+     56000,
+     0
+    ],
+    [
+     243282,
+     "processing",
+     58000,
+     0
+    ],
+    [
+     245369,
+     "processing",
+     59000,
+     0
+    ],
+    [
+     247438,
+     "processing",
+     60000,
+     0
+    ],
+    [
+     249540,
+     "processing",
+     61000,
+     0
+    ],
+    [
+     251630,
+     "processing",
+     63000,
+     0
+    ],
+    [
+     253697,
+     "processing",
+     64000,
+     0
+    ],
+    [
+     255764,
+     "processing",
+     65000,
+     0
+    ],
+    [
+     257810,
+     "processing",
+     67000,
+     0
+    ],
+    [
+     259865,
+     "processing",
+     68000,
+     0
+    ],
+    [
+     261950,
+     "processing",
+     69000,
+     0
+    ],
+    [
+     264076,
+     "processing",
+     71000,
+     0
+    ],
+    [
+     266223,
+     "processing",
+     72000,
+     0
+    ],
+    [
+     268384,
+     "processing",
+     73000,
+     0
+    ],
+    [
+     270458,
+     "processing",
+     74000,
+     0
+    ],
+    [
+     272516,
+     "processing",
+     76000,
+     0
+    ],
+    [
+     274610,
+     "processing",
+     78000,
+     0
+    ],
+    [
+     276728,
+     "processing",
+     79000,
+     0
+    ],
+    [
+     278966,
+     "processing",
+     80000,
+     0
+    ],
+    [
+     281078,
+     "processing",
+     82000,
+     0
+    ],
+    [
+     283134,
+     "processing",
+     83000,
+     0
+    ],
+    [
+     285203,
+     "processing",
+     85000,
+     0
+    ],
+    [
+     287264,
+     "processing",
+     86000,
+     0
+    ],
+    [
+     289370,
+     "processing",
+     86000,
+     0
+    ],
+    [
+     291539,
+     "processing",
+     88000,
+     0
+    ],
+    [
+     293671,
+     "processing",
+     89000,
+     0
+    ],
+    [
+     295743,
+     "processing",
+     90000,
+     0
+    ],
+    [
+     297831,
+     "processing",
+     91000,
+     0
+    ],
+    [
+     299907,
+     "processing",
+     92000,
+     0
+    ],
+    [
+     301945,
+     "processing",
+     94000,
+     0
+    ],
+    [
+     304021,
+     "processing",
+     95000,
+     0
+    ],
+    [
+     306149,
+     "processing",
+     95000,
+     0
+    ],
+    [
+     308204,
+     "processing",
+     97000,
+     0
+    ],
+    [
+     310246,
+     "processing",
+     99000,
+     0
+    ],
+    [
+     312301,
+     "completed",
+     100000,
+     0
+    ]
+   ],
+   "final": {
+    "id": 6,
+    "campus_id": 10,
+    "filename": "c4_100k.xlsx",
+    "status": "completed",
+    "total_rows": 0,
+    "processed_rows": 100000,
+    "successful_rows": 99999,
+    "failed_rows": 1,
+    "percent": 100,
+    "attempts": 1,
+    "queue_position": 0,
+    "error_message": null,
+    "created_at": "2026-09-21 14:23:19",
+    "started_at": "2026-09-21 14:25:59",
+    "completed_at": "2026-09-21 14:28:23",
+    "failed_at": null,
+    "summary": {
+     "graduate_rows": 100000,
+     "imported": 99999,
+     "skipped": 1,
+     "placeholder_emails": 40028,
+     "experience_rows": 83321,
+     "emailed": 0,
+     "sheets": {
+      "Graduates": "100000 graduate rows"
+     },
+     "warnings": [],
+     "errors": [],
+     "skipped_details": [
+      "Graduates!84620 (Grace Aquino-Ka): email already registered (import.aquinoka.grace.2023.graduates84620@no-reply.lspu.invalid)"
+     ],
+     "samples": []
+    },
+    "success": true,
+    "phase": "completed"
+   },
+   "http": 202,
+   "err": null,
+   "post_ms": 6490,
+   "import_id": 6,
+   "started_ms": 168245,
+   "ms": 312301,
+   "rows_done_when_ended": 100000,
+   "queue_wait_ms": 168245,
+   "processing_ms": 144056
+  },
+  {
+   "acct": 3,
+   "file": "c3_100k.xlsx",
+   "bytes": 7590903,
+   "t0": 626,
+   "progress": [
+    [
+     279,
+     "queued",
+     0,
+     0
+    ],
+    [
+     2321,
+     "queued",
+     0,
+     0
+    ],
+    [
+     10453,
+     "queued",
+     0,
+     0
+    ],
+    [
+     12499,
+     "queued",
+     0,
+     0
+    ],
+    [
+     14561,
+     "queued",
+     0,
+     0
+    ],
+    [
+     16632,
+     "queued",
+     0,
+     0
+    ],
+    [
+     18694,
+     "queued",
+     0,
+     0
+    ],
+    [
+     20783,
+     "queued",
+     0,
+     0
+    ],
+    [
+     22823,
+     "queued",
+     0,
+     0
+    ],
+    [
+     24869,
+     "queued",
+     0,
+     0
+    ],
+    [
+     26935,
+     "queued",
+     0,
+     0
+    ],
+    [
+     28967,
+     "queued",
+     0,
+     0
+    ],
+    [
+     31038,
+     "queued",
+     0,
+     0
+    ],
+    [
+     33080,
+     "queued",
+     0,
+     0
+    ],
+    [
+     35112,
+     "queued",
+     0,
+     0
+    ],
+    [
+     37157,
+     "queued",
+     0,
+     0
+    ],
+    [
+     39297,
+     "queued",
+     0,
+     0
+    ],
+    [
+     41478,
+     "queued",
+     0,
+     0
+    ],
+    [
+     43516,
+     "queued",
+     0,
+     0
+    ],
+    [
+     45717,
+     "queued",
+     0,
+     0
+    ],
+    [
+     47833,
+     "queued",
+     0,
+     0
+    ],
+    [
+     49881,
+     "queued",
+     0,
+     0
+    ],
+    [
+     51908,
+     "queued",
+     0,
+     0
+    ],
+    [
+     53959,
+     "queued",
+     0,
+     0
+    ],
+    [
+     56029,
+     "queued",
+     0,
+     0
+    ],
+    [
+     58115,
+     "queued",
+     0,
+     0
+    ],
+    [
+     60182,
+     "queued",
+     0,
+     0
+    ],
+    [
+     62222,
+     "queued",
+     0,
+     0
+    ],
+    [
+     64273,
+     "queued",
+     0,
+     0
+    ],
+    [
+     66336,
+     "queued",
+     0,
+     0
+    ],
+    [
+     68384,
+     "queued",
+     0,
+     0
+    ],
+    [
+     70451,
+     "queued",
+     0,
+     0
+    ],
+    [
+     72499,
+     "queued",
+     0,
+     0
+    ],
+    [
+     74535,
+     "queued",
+     0,
+     0
+    ],
+    [
+     76608,
+     "queued",
+     0,
+     0
+    ],
+    [
+     78665,
+     "queued",
+     0,
+     0
+    ],
+    [
+     80754,
+     "queued",
+     0,
+     0
+    ],
+    [
+     82804,
+     "queued",
+     0,
+     0
+    ],
+    [
+     84867,
+     "queued",
+     0,
+     0
+    ],
+    [
+     86973,
+     "queued",
+     0,
+     0
+    ],
+    [
+     89015,
+     "queued",
+     0,
+     0
+    ],
+    [
+     91076,
+     "queued",
+     0,
+     0
+    ],
+    [
+     93181,
+     "queued",
+     0,
+     0
+    ],
+    [
+     95259,
+     "queued",
+     0,
+     0
+    ],
+    [
+     97311,
+     "queued",
+     0,
+     0
+    ],
+    [
+     99430,
+     "queued",
+     0,
+     0
+    ],
+    [
+     101490,
+     "queued",
+     0,
+     0
+    ],
+    [
+     103524,
+     "queued",
+     0,
+     0
+    ],
+    [
+     105590,
+     "queued",
+     0,
+     0
+    ],
+    [
+     107648,
+     "queued",
+     0,
+     0
+    ],
+    [
+     109724,
+     "queued",
+     0,
+     0
+    ],
+    [
+     111780,
+     "queued",
+     0,
+     0
+    ],
+    [
+     113826,
+     "queued",
+     0,
+     0
+    ],
+    [
+     115880,
+     "queued",
+     0,
+     0
+    ],
+    [
+     117923,
+     "queued",
+     0,
+     0
+    ],
+    [
+     119993,
+     "queued",
+     0,
+     0
+    ],
+    [
+     122026,
+     "queued",
+     0,
+     0
+    ],
+    [
+     124051,
+     "queued",
+     0,
+     0
+    ],
+    [
+     126194,
+     "queued",
+     0,
+     0
+    ],
+    [
+     128227,
+     "queued",
+     0,
+     0
+    ],
+    [
+     130273,
+     "queued",
+     0,
+     0
+    ],
+    [
+     132374,
+     "queued",
+     0,
+     0
+    ],
+    [
+     134466,
+     "queued",
+     0,
+     0
+    ],
+    [
+     136502,
+     "queued",
+     0,
+     0
+    ],
+    [
+     138555,
+     "queued",
+     0,
+     0
+    ],
+    [
+     140650,
+     "queued",
+     0,
+     0
+    ],
+    [
+     142700,
+     "queued",
+     0,
+     0
+    ],
+    [
+     144753,
+     "queued",
+     0,
+     0
+    ],
+    [
+     146788,
+     "queued",
+     0,
+     0
+    ],
+    [
+     148823,
+     "queued",
+     0,
+     0
+    ],
+    [
+     150928,
+     "queued",
+     0,
+     0
+    ],
+    [
+     152964,
+     "queued",
+     0,
+     0
+    ],
+    [
+     155063,
+     "queued",
+     0,
+     0
+    ],
+    [
+     157099,
+     "queued",
+     0,
+     0
+    ],
+    [
+     159156,
+     "queued",
+     0,
+     0
+    ],
+    [
+     161198,
+     "queued",
+     0,
+     0
+    ],
+    [
+     163263,
+     "queued",
+     0,
+     0
+    ],
+    [
+     165344,
+     "queued",
+     0,
+     0
+    ],
+    [
+     167385,
+     "processing",
+     1000,
+     0
+    ],
+    [
+     169490,
+     "processing",
+     3000,
+     0
+    ],
+    [
+     171686,
+     "processing",
+     5000,
+     0
+    ],
+    [
+     173735,
+     "processing",
+     8000,
+     0
+    ],
+    [
+     175798,
+     "processing",
+     10000,
+     0
+    ],
+    [
+     177893,
+     "processing",
+     11000,
+     0
+    ],
+    [
+     179948,
+     "processing",
+     14000,
+     0
+    ],
+    [
+     181986,
+     "processing",
+     16000,
+     0
+    ],
+    [
+     184027,
+     "processing",
+     17000,
+     0
+    ],
+    [
+     186059,
+     "processing",
+     19000,
+     0
+    ],
+    [
+     188085,
+     "processing",
+     21000,
+     0
+    ],
+    [
+     190129,
+     "processing",
+     23000,
+     0
+    ],
+    [
+     192175,
+     "processing",
+     24000,
+     0
+    ],
+    [
+     194233,
+     "processing",
+     27000,
+     0
+    ],
+    [
+     196275,
+     "processing",
+     29000,
+     0
+    ],
+    [
+     198359,
+     "processing",
+     30000,
+     0
+    ],
+    [
+     200477,
+     "processing",
+     32000,
+     0
+    ],
+    [
+     202520,
+     "processing",
+     33000,
+     0
+    ],
+    [
+     204575,
+     "processing",
+     35000,
+     0
+    ],
+    [
+     206706,
+     "processing",
+     37000,
+     0
+    ],
+    [
+     208893,
+     "processing",
+     38000,
+     0
+    ],
+    [
+     211025,
+     "processing",
+     39000,
+     0
+    ],
+    [
+     213063,
+     "processing",
+     40000,
+     0
+    ],
+    [
+     215122,
+     "processing",
+     42000,
+     0
+    ],
+    [
+     217232,
+     "processing",
+     44000,
+     0
+    ],
+    [
+     219357,
+     "processing",
+     45000,
+     0
+    ],
+    [
+     221441,
+     "processing",
+     46000,
+     0
+    ],
+    [
+     223523,
+     "processing",
+     47000,
+     0
+    ],
+    [
+     225576,
+     "processing",
+     48000,
+     0
+    ],
+    [
+     227622,
+     "processing",
+     50000,
+     0
+    ],
+    [
+     229681,
+     "processing",
+     51000,
+     0
+    ],
+    [
+     231824,
+     "processing",
+     52000,
+     0
+    ],
+    [
+     233917,
+     "processing",
+     53000,
+     0
+    ],
+    [
+     236033,
+     "processing",
+     54000,
+     0
+    ],
+    [
+     238096,
+     "processing",
+     54000,
+     0
+    ],
+    [
+     240205,
+     "processing",
+     56000,
+     0
+    ],
+    [
+     242430,
+     "processing",
+     57000,
+     0
+    ],
+    [
+     244524,
+     "processing",
+     58000,
+     0
+    ],
+    [
+     246596,
+     "processing",
+     59000,
+     0
+    ],
+    [
+     248759,
+     "processing",
+     60000,
+     0
+    ],
+    [
+     250809,
+     "processing",
+     62000,
+     0
+    ],
+    [
+     252876,
+     "processing",
+     63000,
+     0
+    ],
+    [
+     254949,
+     "processing",
+     64000,
+     0
+    ],
+    [
+     257019,
+     "processing",
+     66000,
+     0
+    ],
+    [
+     259092,
+     "processing",
+     67000,
+     0
+    ],
+    [
+     261157,
+     "processing",
+     68000,
+     0
+    ],
+    [
+     263218,
+     "processing",
+     70000,
+     0
+    ],
+    [
+     265292,
+     "processing",
+     71000,
+     0
+    ],
+    [
+     267413,
+     "processing",
+     72000,
+     0
+    ],
+    [
+     269449,
+     "processing",
+     73000,
+     0
+    ],
+    [
+     271485,
+     "processing",
+     74000,
+     0
+    ],
+    [
+     273554,
+     "processing",
+     76000,
+     0
+    ],
+    [
+     275606,
+     "processing",
+     78000,
+     0
+    ],
+    [
+     277685,
+     "processing",
+     79000,
+     0
+    ],
+    [
+     279860,
+     "processing",
+     80000,
+     0
+    ],
+    [
+     281910,
+     "processing",
+     82000,
+     0
+    ],
+    [
+     283970,
+     "processing",
+     83000,
+     0
+    ],
+    [
+     286080,
+     "processing",
+     84000,
+     0
+    ],
+    [
+     288233,
+     "processing",
+     85000,
+     0
+    ],
+    [
+     290319,
+     "processing",
+     86000,
+     0
+    ],
+    [
+     292470,
+     "processing",
+     87000,
+     0
+    ],
+    [
+     294525,
+     "processing",
+     88000,
+     0
+    ],
+    [
+     296606,
+     "processing",
+     89000,
+     0
+    ],
+    [
+     298663,
+     "processing",
+     90000,
+     0
+    ],
+    [
+     300734,
+     "processing",
+     92000,
+     0
+    ],
+    [
+     302828,
+     "processing",
+     93000,
+     0
+    ],
+    [
+     304933,
+     "processing",
+     94000,
+     0
+    ],
+    [
+     306993,
+     "processing",
+     95000,
+     0
+    ],
+    [
+     309070,
+     "processing",
+     96000,
+     0
+    ],
+    [
+     311131,
+     "processing",
+     99000,
+     0
+    ],
+    [
+     313194,
+     "completed",
+     100000,
+     0
+    ]
+   ],
+   "final": {
+    "id": 5,
+    "campus_id": 9,
+    "filename": "c3_100k.xlsx",
+    "status": "completed",
+    "total_rows": 0,
+    "processed_rows": 100000,
+    "successful_rows": 99998,
+    "failed_rows": 2,
+    "percent": 100,
+    "attempts": 1,
+    "queue_position": 0,
+    "error_message": null,
+    "created_at": "2026-09-21 14:23:13",
+    "started_at": "2026-09-21 14:25:58",
+    "completed_at": "2026-09-21 14:28:24",
+    "failed_at": null,
+    "summary": {
+     "graduate_rows": 100000,
+     "imported": 99998,
+     "skipped": 2,
+     "placeholder_emails": 39887,
+     "experience_rows": 83244,
+     "emailed": 0,
+     "sheets": {
+      "Graduates": "100000 graduate rows"
+     },
+     "warnings": [],
+     "errors": [],
+     "skipped_details": [
+      "Graduates!7324 (James Cruz-Tb): email already registered (import.cruztb.james.2023.graduates7324@no-reply.lspu.invalid)",
+      "Graduates!99580 (Joy Dela Cruz-Uk): email already registered (import.delacruzuk.joy.2023.graduates99580@no-reply.lspu.invalid)"
+     ],
+     "samples": []
+    },
+    "success": true,
+    "phase": "completed"
+   },
+   "http": 202,
+   "err": null,
+   "post_ms": 278,
+   "import_id": 5,
+   "started_ms": 167385,
+   "ms": 313194,
+   "rows_done_when_ended": 100000,
+   "queue_wait_ms": 167385,
+   "processing_ms": 145809
+  }
+ ],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 254,
+   "p50": 58,
+   "p95": 5459
+  },
+  {
+   "t": 10,
+   "n": 399,
+   "p50": 50,
+   "p95": 311
+  },
+  {
+   "t": 20,
+   "n": 399,
+   "p50": 48,
+   "p95": 156
+  },
+  {
+   "t": 30,
+   "n": 426,
+   "p50": 54,
+   "p95": 190
+  },
+  {
+   "t": 40,
+   "n": 416,
+   "p50": 64,
+   "p95": 237
+  },
+  {
+   "t": 50,
+   "n": 426,
+   "p50": 52,
+   "p95": 154
+  },
+  {
+   "t": 60,
+   "n": 415,
+   "p50": 51,
+   "p95": 205
+  },
+  {
+   "t": 70,
+   "n": 406,
+   "p50": 56,
+   "p95": 185
+  },
+  {
+   "t": 80,
+   "n": 385,
+   "p50": 67,
+   "p95": 739
+  },
+  {
+   "t": 90,
+   "n": 385,
+   "p50": 57,
+   "p95": 166
+  },
+  {
+   "t": 100,
+   "n": 406,
+   "p50": 59,
+   "p95": 196
+  },
+  {
+   "t": 110,
+   "n": 422,
+   "p50": 57,
+   "p95": 167
+  },
+  {
+   "t": 120,
+   "n": 423,
+   "p50": 57,
+   "p95": 196
+  },
+  {
+   "t": 130,
+   "n": 373,
+   "p50": 62,
+   "p95": 879
+  },
+  {
+   "t": 140,
+   "n": 345,
+   "p50": 66,
+   "p95": 911
+  },
+  {
+   "t": 150,
+   "n": 295,
+   "p50": 58,
+   "p95": 2813
+  },
+  {
+   "t": 160,
+   "n": 388,
+   "p50": 71,
+   "p95": 2407
+  },
+  {
+   "t": 170,
+   "n": 258,
+   "p50": 68,
+   "p95": 2761
+  },
+  {
+   "t": 180,
+   "n": 347,
+   "p50": 43,
+   "p95": 825
+  },
+  {
+   "t": 190,
+   "n": 437,
+   "p50": 47,
+   "p95": 180
+  },
+  {
+   "t": 200,
+   "n": 335,
+   "p50": 95,
+   "p95": 602
+  },
+  {
+   "t": 210,
+   "n": 382,
+   "p50": 71,
+   "p95": 320
+  },
+  {
+   "t": 220,
+   "n": 362,
+   "p50": 102,
+   "p95": 423
+  },
+  {
+   "t": 230,
+   "n": 338,
+   "p50": 119,
+   "p95": 661
+  },
+  {
+   "t": 240,
+   "n": 310,
+   "p50": 90,
+   "p95": 306
+  },
+  {
+   "t": 250,
+   "n": 374,
+   "p50": 83,
+   "p95": 232
+  },
+  {
+   "t": 260,
+   "n": 388,
+   "p50": 93,
+   "p95": 219
+  },
+  {
+   "t": 270,
+   "n": 380,
+   "p50": 72,
+   "p95": 220
+  },
+  {
+   "t": 280,
+   "n": 348,
+   "p50": 83,
+   "p95": 1613
+  },
+  {
+   "t": 290,
+   "n": 259,
+   "p50": 80,
+   "p95": 2271
+  },
+  {
+   "t": 300,
+   "n": 323,
+   "p50": 80,
+   "p95": 1000
+  },
+  {
+   "t": 310,
+   "n": 165,
+   "p50": 43,
+   "p95": 114
+  }
+ ],
+ "errBodies": [],
+ "upload_window_ms": 313820,
+ "during_upload": {
+  "n": 11563,
+  "rps": 36.85,
+  "avg": 213,
+  "p50": 65,
+  "p95": 506,
+  "p99": 4234,
+  "max": 12480,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 11563,
+  "kb": 23
+ },
+ "after_upload": {
+  "n": 6,
+  "rps": 1.74,
+  "avg": 43,
+  "p50": 40,
+  "p95": 58,
+  "p99": 58,
+  "max": 58,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 6,
+  "kb": 24
+ }
+}

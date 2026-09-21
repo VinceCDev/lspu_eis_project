@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Concerns\LegacyQueries;
+use App\Services\ReportingSummary;
+use App\Services\SummaryReader;
 use Illuminate\Support\Facades\DB;
 
 /** Ported from backend/Models/Report.php — see User.php's docblock for the porting approach. */
@@ -46,6 +48,22 @@ class Report
         $this->yearGraduated = $yearGraduated;
     }
 
+    private ?SummaryReader $summaryReader = null;
+    private bool $summaryChecked = false;
+
+    /** Pre-aggregated reader when this campus's summary is built, else null (=> the original live query runs). */
+    private function summary(): ?SummaryReader
+    {
+        if (!$this->summaryChecked) {
+            $this->summaryChecked = true;
+            $this->summaryReader = ReportingSummary::ready($this->campusId)
+                ? new SummaryReader($this->campusId, $this->college, $this->yearGraduated)
+                : null;
+        }
+
+        return $this->summaryReader;
+    }
+
     private function campusClause(string $alias, bool $isFirstCondition = false): string
     {
         $conditions = [];
@@ -68,6 +86,17 @@ class Report
         return " {$keyword} ".implode(' AND ', $conditions).' ';
     }
 
+    /** Number of alumni in the current campus/college/year scope (index-only COUNT; used to guard unbounded exports). */
+    public function alumniCount(): int
+    {
+        if ($s = $this->summary()) {
+            return $s->alumniCount();
+        }
+        $row = $this->selectOne('SELECT COUNT(*) AS c FROM alumni a'.$this->campusClause('a', true));
+
+        return (int) ($row['c'] ?? 0);
+    }
+
     public function courseCollegeJobRows(): array
     {
         return $this->selectAll("SELECT a.alumni_id, a.course, a.college, e.title as job_title, e.employment_status, e.employment_sector, e.location_of_work
@@ -79,7 +108,7 @@ class Report
 
     public function sectorStats(): array
     {
-        return $this->selectAll("SELECT COALESCE(e.employment_sector, 'Not Specified') as employment_sector, COUNT(DISTINCT a.alumni_id) as count
+        return $this->summary()?->sectorStats() ?? $this->selectAll("SELECT COALESCE(e.employment_sector, 'Not Specified') as employment_sector, COUNT(DISTINCT a.alumni_id) as count
             FROM alumni a
             LEFT JOIN alumni_experience e ON a.alumni_id = e.alumni_id
             WHERE e.employment_status IS NOT NULL AND e.employment_status != ''"
@@ -90,7 +119,7 @@ class Report
 
     public function locationStats(): array
     {
-        return $this->selectAll("SELECT COALESCE(e.location_of_work, 'Not Specified') as location_of_work, COUNT(DISTINCT a.alumni_id) as count
+        return $this->summary()?->locationStats() ?? $this->selectAll("SELECT COALESCE(e.location_of_work, 'Not Specified') as location_of_work, COUNT(DISTINCT a.alumni_id) as count
             FROM alumni a
             LEFT JOIN alumni_experience e ON a.alumni_id = e.alumni_id
             WHERE e.employment_status IS NOT NULL AND e.employment_status != ''"
@@ -101,6 +130,9 @@ class Report
 
     public function employedCount(): int
     {
+        if ($s = $this->summary()) {
+            return $s->employedCount();
+        }
         $row = $this->selectOne("SELECT COUNT(DISTINCT a.alumni_id) as count
             FROM alumni a
             LEFT JOIN alumni_experience e ON a.alumni_id = e.alumni_id
@@ -112,6 +144,9 @@ class Report
 
     public function unemployedCount(): int
     {
+        if ($s = $this->summary()) {
+            return $s->unemployedCount();
+        }
         // Anti-join (matches DashboardStats' C3): alumni with no experience row
         // that carries a non-empty employment_status. MySQL drives this from an
         // index on alumni_experience(alumni_id) instead of materialising every
@@ -138,7 +173,7 @@ class Report
      */
     public function programEmploymentAggregate(): array
     {
-        return $this->selectAll(
+        return $this->summary()?->programEmploymentAggregate() ?? $this->selectAll(
             "SELECT a.course, a.college,
                     COUNT(*) AS total_graduates,
                     SUM(CASE WHEN e.employment_status IS NOT NULL AND e.employment_status <> '' THEN 1 ELSE 0 END) AS employed_count
@@ -157,7 +192,7 @@ class Report
      */
     public function employedJobTitleCounts(): array
     {
-        return $this->selectAll(
+        return $this->summary()?->employedJobTitleCounts() ?? $this->selectAll(
             "SELECT a.course, a.college, e.title AS job_title, COUNT(*) AS cnt
              FROM alumni a
              JOIN alumni_experience e ON a.alumni_id = e.alumni_id AND e.current = 1
@@ -227,6 +262,9 @@ class Report
     /** Distinct college names available for the current campus scope (ignores the college filter itself). */
     public function distinctColleges(): array
     {
+        if ($s = $this->summary()) {
+            return $s->distinctColleges();
+        }
         $sql = "SELECT DISTINCT college FROM alumni a WHERE college IS NOT NULL AND college != ''";
         if ($this->campusId !== null) {
             $sql .= ' AND a.campus_id = '.((int) $this->campusId);
@@ -239,6 +277,9 @@ class Report
     /** Distinct graduation years available for the current campus scope (ignores the year filter itself). */
     public function distinctYears(): array
     {
+        if ($s = $this->summary()) {
+            return $s->distinctYears();
+        }
         $sql = "SELECT DISTINCT year_graduated FROM alumni a WHERE year_graduated IS NOT NULL AND year_graduated != ''";
         if ($this->campusId !== null) {
             $sql .= ' AND a.campus_id = '.((int) $this->campusId);

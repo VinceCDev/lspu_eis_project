@@ -1,0 +1,64 @@
+{
+ "name": "L500k_export_c1",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 37,
+ "overall": {
+  "n": 1,
+  "rps": 0.03,
+  "avg": 36163,
+  "p50": 36163,
+  "p95": 36163,
+  "p99": 36163,
+  "max": 36163,
+  "err_5xx": 1,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 0,
+  "kb": 0
+ },
+ "byLabel": {
+  "rep:fullData(export)": {
+   "n": 1,
+   "rps": 0.03,
+   "avg": 36163,
+   "p50": 36163,
+   "p95": 36163,
+   "p99": 36163,
+   "max": 36163,
+   "err_5xx": 1,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 0,
+   "kb": 0,
+   "perf": {
+    "db_ms_avg": 0,
+    "q_avg": 0,
+    "dupe_avg": 0,
+    "mem_mb_max": 0
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 1,
+   "p50": 36163,
+   "p95": 36163
+  }
+ ],
+ "errBodies": [
+  {
+   "label": "rep:fullData(export)",
+   "path": "/admin_reports?action=fullData",
+   "status": 500,
+   "body": ""
+  }
+ ]
+}

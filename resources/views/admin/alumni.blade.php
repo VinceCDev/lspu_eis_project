@@ -9,7 +9,7 @@
                 <i class="fas fa-plus"></i> Add Alumni
             </button>
             <button class="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition w-full sm:w-auto justify-center" @click="openImportModal">
-                <i class="fas fa-file-import"></i> Import
+                <i class="fas fa-file-import"></i> Import <span v-if="importActive > 0" class="ml-1 text-xs px-1.5 py-0.5 rounded-full bg-white text-indigo-700" title="Imports running or waiting">{{ importActive }}</span>
             </button>
             <button class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition w-full sm:w-auto justify-center" @click="exportToExcel">
                 <i class="fas fa-file-excel"></i> Export Excel
@@ -110,7 +110,7 @@
     </div>
     <div class="flex flex-col md:flex-row md:items-center md:justify-between mt-4 gap-2">
         <div class="text-gray-600 dark:text-gray-300 text-sm text-center md:text-left">
-            Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to {{ Math.min(currentPage * itemsPerPage, filteredAlumni.length) }} of {{ filteredAlumni.length }} entries
+            Showing {{ totalAlumni ? (currentPage - 1) * itemsPerPage + 1 : 0 }} to {{ Math.min(currentPage * itemsPerPage, totalAlumni) }} of {{ totalAlumni.toLocaleString() }}{{ totalCapped ? '+' : '' }} entries
         </div>
         <div class="flex gap-1 justify-center items-center">
             <button class="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" :disabled="!paginationGroup.hasPrevGroup" @click="goToPrevGroup" title="Previous 5 pages">
@@ -465,17 +465,18 @@
 </style>
 <div v-if="showImportModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black bg-opacity-50" role="dialog" aria-modal="true" style="padding:1rem;">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-lg mx-2 p-6 relative" style="max-height:88vh;overflow-y:auto;">
-        <button class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" @click="showImportModal = false" aria-label="Close"><i class="fas fa-times"></i></button>
+        <button class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" @click="closeImportModal" aria-label="Close"><i class="fas fa-times"></i></button>
         <h3 class="text-lg font-bold mb-1 text-gray-800 dark:text-gray-100">Import from Employment Report</h3>
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
             Upload an LSPU "Data on Employment" tracer file (.xlsx / .xls / .csv). Each listed graduate
             is added as an alumni record, with their LSPU degree and current job. Rows with a blank
             email get a temporary inactive account. Existing emails are skipped.
-            Credential emails are <strong>not</strong> sent during import unless the
-            "New Account Emails" setting is turned on.
+            Large files are imported <strong>in the background</strong>: you can close this window
+            and come back later to check on it.
         </p>
 
-        <div v-if="!importResult">
+        <!-- 1) choose a file / upload -->
+        <div v-if="!importJob && !importResult">
             <div class="mb-3" style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
                 <div v-if="isSuperadmin">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Campus <span class="text-red-500">*</span></label>
@@ -494,46 +495,93 @@
                 <i class="fas fa-file-excel text-3xl text-indigo-500 mb-2"></i>
                 <div class="text-sm text-gray-600 dark:text-gray-300">{{ importFile ? importFile.name : 'Click to choose a file' }}</div>
             </label>
-
-            <!-- Progress: real % for the upload, then a real row-processing %
-                 polled from the server while it parses + inserts rows. -->
             <div v-else class="border-2 border-dashed border-indigo-200 dark:border-indigo-800 rounded-lg p-6">
                 <div class="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                    <span>
-                        <i class="fas fa-file-excel text-indigo-500 mr-1"></i>
-                        <span v-if="importPhase === 'uploading'">Uploading file…</span>
-                        <span v-else>Processing spreadsheet…</span>
-                    </span>
-                    <span v-if="importPhase === 'uploading'">{{ importUploadPct }}%</span>
-                    <span v-else>{{ importProcessPct }}%</span>
+                    <span><i class="fas fa-file-excel text-indigo-500 mr-1"></i>Uploading file…</span>
+                    <span>{{ importUploadPct }}%</span>
                 </div>
                 <div class="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                    <div v-if="importPhase === 'uploading'" class="h-full bg-indigo-600" style="transition:width .2s ease;" :style="{ width: importUploadPct + '%' }"></div>
-                    <div v-else-if="importProcessPct > 0" class="h-full bg-indigo-600" style="transition:width .3s ease;" :style="{ width: importProcessPct + '%' }"></div>
-                    <div v-else class="h-full bg-indigo-600 import-bar-indeterminate"></div>
+                    <div class="h-full bg-indigo-600" style="transition:width .2s ease;" :style="{ width: importUploadPct + '%' }"></div>
                 </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    {{ importFile ? importFile.name : '' }} — please keep this window open. Large files can take up to a minute.
-                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">{{ importFile ? importFile.name : '' }} — keep this window open until the upload reaches 100%.</p>
             </div>
 
             <div class="flex justify-end gap-2 mt-5">
-                <button class="px-4 py-2 rounded bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700 disabled:opacity-50" :disabled="importing" @click="showImportModal = false">Cancel</button>
+                <button class="px-4 py-2 rounded bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700 disabled:opacity-50" :disabled="importing" @click="closeImportModal">Cancel</button>
                 <button class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition disabled:opacity-50" :disabled="!importFile || importing || (isSuperadmin && !importCampusId) || !importYear" @click="runImport">
-                    <span v-if="importing"><i class="fas fa-spinner fa-spin mr-1"></i>{{ importPhase === 'uploading' ? 'Uploading…' : 'Processing…' }}</span>
-                    <span v-else>Import</span>
+                    <span v-if="importing"><i class="fas fa-spinner fa-spin mr-1"></i>Uploading…</span>
+                    <span v-else>Upload &amp; import</span>
                 </button>
+            </div>
+
+            <div v-if="importHistory.length" class="mt-6">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Recent imports</div>
+                <ul class="divide-y divide-gray-100 dark:divide-gray-700 text-sm">
+                    <li v-for="j in importHistory" :key="j.id" class="py-2 flex items-center justify-between gap-2">
+                        <div style="min-width:0;">
+                            <div class="truncate text-gray-800 dark:text-gray-100" :title="j.filename">{{ j.filename }}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                {{ importStatusLabel(j) }}<span v-if="j.total_rows"> · {{ j.processed_rows.toLocaleString() }} / {{ j.total_rows.toLocaleString() }}</span><span v-if="j.status === 'completed'"> · {{ j.successful_rows.toLocaleString() }} imported</span>
+                            </div>
+                        </div>
+                        <button class="text-xs px-2 py-1 rounded border border-indigo-300 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-gray-700 shrink-0" @click="watchImport(j)">{{ importIsActive(j) ? 'Watch' : 'Details' }}</button>
+                    </li>
+                </ul>
             </div>
         </div>
 
+        <!-- 2) queued / processing: progress from the server -->
+        <div v-else-if="importJob && !importResult" class="text-sm">
+            <div class="border-2 border-dashed rounded-lg p-5" :class="importJob.status === 'failed' ? 'border-red-300 dark:border-red-800' : 'border-indigo-200 dark:border-indigo-800'">
+                <div class="flex items-center justify-between font-medium text-gray-700 dark:text-gray-200 mb-2">
+                    <span class="truncate" :title="importJob.filename"><i class="fas fa-file-excel text-indigo-500 mr-1"></i>{{ importJob.filename }}</span>
+                    <span class="ml-2 shrink-0 text-xs px-2 py-0.5 rounded-full"
+                          :class="{
+                              'bg-amber-100 text-amber-800': importJob.status === 'queued',
+                              'bg-indigo-100 text-indigo-800': importJob.status === 'processing',
+                              'bg-green-100 text-green-800': importJob.status === 'completed',
+                              'bg-red-100 text-red-800': importJob.status === 'failed',
+                              'bg-gray-200 text-gray-700': importJob.status === 'cancelled'
+                          }">{{ importStatusLabel(importJob) }}</span>
+                </div>
+                <div class="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                    <div v-if="importJob.status === 'processing' && importJob.total_rows > 0" class="h-full bg-indigo-600" style="transition:width .4s ease;" :style="{ width: importJob.percent + '%' }"></div>
+                    <div v-else-if="importIsActive(importJob)" class="h-full bg-indigo-600 import-bar-indeterminate"></div>
+                    <div v-else class="h-full" :class="importJob.status === 'failed' ? 'bg-red-500' : 'bg-gray-400'" :style="{ width: importJob.percent + '%' }"></div>
+                </div>
+                <div class="flex items-center justify-between mt-2 text-gray-700 dark:text-gray-200">
+                    <span v-if="importJob.total_rows > 0">{{ importJob.processed_rows.toLocaleString() }} / {{ importJob.total_rows.toLocaleString() }} rows</span>
+                    <span v-else>Waiting for a free import slot…</span>
+                    <span class="font-semibold">{{ importJob.percent }}%</span>
+                </div>
+                <div v-if="importJob.processed_rows > 0" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Successful: {{ importJob.successful_rows.toLocaleString() }} · Skipped / failed: {{ importJob.failed_rows.toLocaleString() }}
+                </div>
+                <p v-if="importJob.error_message" class="mt-2 text-xs" :class="importJob.status === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'">{{ importJob.error_message }}</p>
+                <p v-if="importIsActive(importJob)" class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    This runs on the server — you can close this window or leave the page. Come back to Import to see the result.
+                </p>
+            </div>
+            <div class="flex justify-between gap-2 mt-5">
+                <button v-if="importIsActive(importJob)" class="px-3 py-2 rounded text-red-700 border border-red-300 hover:bg-red-50 dark:hover:bg-gray-700" @click="cancelImport">Cancel import</button>
+                <span v-else></span>
+                <div class="flex gap-2">
+                    <button class="px-4 py-2 rounded bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700" @click="importJob = null; _stopImportPoll(); loadImportHistory()">Back</button>
+                    <button class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition" @click="closeImportModal">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3) finished: summary -->
         <div v-else class="text-sm">
             <div class="mb-3" style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">
-                <div class="bg-green-50 dark:bg-gray-700 rounded p-3"><span class="text-2xl font-bold text-green-700 dark:text-green-300">{{ importResult.imported }}</span><div class="text-gray-600 dark:text-gray-400">imported</div></div>
-                <div class="bg-gray-50 dark:bg-gray-700 rounded p-3"><span class="text-2xl font-bold text-gray-700 dark:text-gray-200">{{ importResult.skipped }}</span><div class="text-gray-600 dark:text-gray-400">skipped</div></div>
-                <div class="bg-gray-50 dark:bg-gray-700 rounded p-3"><span class="font-bold">{{ importResult.experience_rows }}</span> job entries</div>
-                <div class="bg-gray-50 dark:bg-gray-700 rounded p-3"><span class="font-bold">{{ importResult.placeholder_emails }}</span> temp emails</div>
+                <div class="bg-green-50 dark:bg-gray-700 rounded p-3"><span class="text-2xl font-bold text-green-700 dark:text-green-300">{{ (importResult.imported || 0).toLocaleString() }}</span><div class="text-gray-600 dark:text-gray-400">imported</div></div>
+                <div class="bg-gray-50 dark:bg-gray-700 rounded p-3"><span class="text-2xl font-bold text-gray-700 dark:text-gray-200">{{ (importResult.skipped || 0).toLocaleString() }}</span><div class="text-gray-600 dark:text-gray-400">skipped</div></div>
+                <div class="bg-gray-50 dark:bg-gray-700 rounded p-3"><span class="font-bold">{{ (importResult.experience_rows || 0).toLocaleString() }}</span> job entries</div>
+                <div class="bg-gray-50 dark:bg-gray-700 rounded p-3"><span class="font-bold">{{ (importResult.placeholder_emails || 0).toLocaleString() }}</span> temp emails</div>
             </div>
-            <p class="text-gray-500 dark:text-gray-400 mb-3">{{ importResult.emailed || 0 }} credential email(s) sent.</p>
+            <p class="text-gray-500 dark:text-gray-400 mb-1">{{ importResult.emailed || 0 }} credential email(s) sent.</p>
+            <p class="text-gray-500 dark:text-gray-400 mb-3 text-xs">Dashboard and Reports figures update within a minute or two.</p>
             <div v-if="importResult.warnings && importResult.warnings.length" class="mb-2">
                 <div class="font-semibold text-amber-600 dark:text-amber-400">Warnings ({{ importResult.warnings.length }})</div>
                 <ul class="list-disc ml-5 text-gray-600 dark:text-gray-300" style="max-height:8rem;overflow-y:auto;">

@@ -1,0 +1,155 @@
+{
+ "name": "L1m_reports_super_cold",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 52,
+ "overall": {
+  "n": 5,
+  "rps": 0.1,
+  "avg": 10191,
+  "p50": 734,
+  "p95": 40012,
+  "p99": 40012,
+  "max": 40012,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 5,
+  "kb": 17
+ },
+ "byLabel": {
+  "rep:page": {
+   "n": 1,
+   "rps": 0.02,
+   "avg": 86,
+   "p50": 86,
+   "p95": 86,
+   "p99": 86,
+   "max": 86,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 40,
+   "perf": {
+    "db_ms_avg": 0,
+    "q_avg": 0,
+    "dupe_avg": 0,
+    "mem_mb_max": 6
+   }
+  },
+  "rep:colleges": {
+   "n": 1,
+   "rps": 0.02,
+   "avg": 93,
+   "p50": 93,
+   "p95": 93,
+   "p99": 93,
+   "max": 93,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 0,
+   "perf": {
+    "db_ms_avg": 3,
+    "q_avg": 1,
+    "dupe_avg": 0,
+    "mem_mb_max": 4
+   }
+  },
+  "rep:years": {
+   "n": 1,
+   "rps": 0.02,
+   "avg": 734,
+   "p50": 734,
+   "p95": 734,
+   "p99": 734,
+   "max": 734,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 0,
+   "perf": {
+    "db_ms_avg": 669,
+    "q_avg": 1,
+    "dupe_avg": 0,
+    "mem_mb_max": 122
+   }
+  },
+  "rep:summary": {
+   "n": 1,
+   "rps": 0.02,
+   "avg": 40012,
+   "p50": 40012,
+   "p95": 40012,
+   "p99": 40012,
+   "max": 40012,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 21,
+   "perf": {
+    "db_ms_avg": 39864,
+    "q_avg": 9,
+    "dupe_avg": 0,
+    "mem_mb_max": 20
+   }
+  },
+  "rep:summary(filter year)": {
+   "n": 1,
+   "rps": 0.02,
+   "avg": 10031,
+   "p50": 10031,
+   "p95": 10031,
+   "p99": 10031,
+   "max": 10031,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 1,
+   "kb": 21,
+   "perf": {
+    "db_ms_avg": 9916,
+    "q_avg": 9,
+    "dupe_avg": 0,
+    "mem_mb_max": 62
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 4,
+   "p50": 93,
+   "p95": 40012
+  },
+  {
+   "t": 40,
+   "n": 1,
+   "p50": 10031,
+   "p95": 10031
+  }
+ ],
+ "errBodies": []
+}

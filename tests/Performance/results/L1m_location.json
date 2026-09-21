@@ -1,0 +1,57 @@
+{
+ "name": "L1m_location",
+ "base": "http://127.0.0.1:8091",
+ "duration_s": 3,
+ "overall": {
+  "n": 5,
+  "rps": 1.97,
+  "avg": 1661,
+  "p50": 1701,
+  "p95": 1764,
+  "p99": 1764,
+  "max": 1764,
+  "err_5xx": 0,
+  "s502": 0,
+  "s503": 0,
+  "s504": 0,
+  "timeouts": 0,
+  "conn_err": 0,
+  "ok": 5,
+  "kb": 3
+ },
+ "byLabel": {
+  "loc:alumniAtLocation": {
+   "n": 5,
+   "rps": 1.97,
+   "avg": 1661,
+   "p50": 1701,
+   "p95": 1764,
+   "p99": 1764,
+   "max": 1764,
+   "err_5xx": 0,
+   "s502": 0,
+   "s503": 0,
+   "s504": 0,
+   "timeouts": 0,
+   "conn_err": 0,
+   "ok": 5,
+   "kb": 3,
+   "perf": {
+    "db_ms_avg": 1487,
+    "q_avg": 3,
+    "dupe_avg": 0,
+    "mem_mb_max": 12
+   }
+  }
+ },
+ "uploads": [],
+ "timeline": [
+  {
+   "t": 0,
+   "n": 5,
+   "p50": 1701,
+   "p95": 1764
+  }
+ ],
+ "errBodies": []
+}
