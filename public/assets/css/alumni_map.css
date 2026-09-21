@@ -1,0 +1,68 @@
+/* Alumni Location map: popup, aggregate bubbles and the one-alumnus-at-a-time viewer.
+   Self-contained on purpose (the app's Tailwind CSS is precompiled, so new utility classes would not exist). Dark mode
+   follows the app's `.dark` class on <html>/<body>. */
+
+.alumni-map-wrap { position: relative; }
+
+/* ---- popup ---- */
+.amp { font-size: 12px; line-height: 1.4; }
+.amp-title { font-size: 14px; display: block; margin-bottom: 6px; }
+.amp-stats { margin-bottom: 4px; }
+.amp-courses { margin-top: 6px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.amp-course { background: none; border: 0; padding: 0; font-size: 12px; text-align: left; color: #1d4ed8; cursor: pointer; }
+.amp-course:hover, .amp-course:focus-visible { text-decoration: underline; }
+.amp-view { margin-top: 8px; padding: 4px 10px; font-size: 12px; background: #3b82f6; color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
+.amp-view:hover { background: #2563eb; }
+
+/* ---- aggregate ("grid cell") bubbles ---- */
+.alumni-agg-bubble { width: 44px; height: 44px; border-radius: 50%; background: rgba(59, 130, 246, .85); color: #fff; font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; border: 3px solid rgba(255, 255, 255, .85); box-shadow: 0 1px 4px rgba(0, 0, 0, .35); cursor: pointer; }
+
+/* ---- note under the map ---- */
+.amv-note { margin-top: 8px; font-size: 12px; color: #6b7280; }
+.dark .amv-note { color: #9ca3af; }
+
+/* ---- single-alumnus viewer (covers the map; the map underneath is never re-created) ---- */
+.amv-panel { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; background: #fff; color: #1f2937; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); overflow: hidden; }
+.dark .amv-panel { background: #1f2937; color: #e5e7eb; border-color: #4b5563; }
+
+.amv-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border-bottom: 1px solid #e5e7eb; }
+.dark .amv-head { border-color: #4b5563; }
+.amv-where { font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 140px; text-align: center; }
+.amv-pos { font-size: 13px; font-weight: 700; color: #1d4ed8; white-space: nowrap; }
+.dark .amv-pos { color: #93c5fd; }
+
+.amv-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; color: #1f2937; cursor: pointer; }
+.amv-btn:hover:not(:disabled) { background: #f3f4f6; }
+.amv-btn:disabled { opacity: .45; cursor: not-allowed; }
+.amv-btn-primary { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+.amv-btn-primary:hover:not(:disabled) { background: #2563eb; }
+.dark .amv-btn { background: #374151; border-color: #4b5563; color: #e5e7eb; }
+.dark .amv-btn:hover:not(:disabled) { background: #4b5563; }
+.dark .amv-btn-primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+.amv-btn:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+
+.amv-body { flex: 1 1 auto; overflow-y: auto; padding: 12px 16px; }
+.amv-person { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.amv-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid #3b82f6; flex: none; }
+.amv-avatar-empty { width: 56px; height: 56px; border-radius: 50%; background: #dbeafe; color: #1d4ed8; display: flex; align-items: center; justify-content: center; font-weight: 700; flex: none; }
+.amv-name { font-size: 17px; font-weight: 700; margin: 0; }
+.amv-sub { font-size: 13px; color: #4b5563; margin: 2px 0 0; }
+.dark .amv-sub { color: #9ca3af; }
+.amv-badge { display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.amv-badge.employed { background: #dcfce7; color: #166534; }
+.amv-badge.unemployed { background: #fee2e2; color: #991b1b; }
+.amv-work { border-left: 3px solid #3b82f6; padding-left: 12px; margin-top: 6px; }
+.amv-grid { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 13px; margin: 0; }
+.amv-grid dt { font-weight: 600; color: #4b5563; }
+.dark .amv-grid dt { color: #9ca3af; }
+.amv-grid dd { margin: 0; overflow-wrap: anywhere; }
+.amv-muted { font-size: 13px; color: #6b7280; }
+.amv-error { font-size: 13px; color: #b91c1c; }
+.dark .amv-error { color: #fca5a5; }
+.amv-skel { height: 14px; border-radius: 4px; background: #e5e7eb; margin: 10px 0; animation: amv-pulse 1.2s ease-in-out infinite; }
+.dark .amv-skel { background: #4b5563; }
+@keyframes amv-pulse { 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .amv-skel { animation: none; } }
+
+.amv-foot { display: flex; justify-content: space-between; padding: 8px 12px; border-top: 1px solid #e5e7eb; }
+.dark .amv-foot { border-color: #4b5563; }

@@ -53,7 +53,13 @@ createApp({
             employmentStatusLoading: true,
             employmentStatusByCampus: [],
             selectedCampusForChart: null,
-            campusCharts: {}
+            campusCharts: {},
+            // Alumni Location map (see alumni_map.js): status note + the one-alumnus-at-a-time viewer.
+            mapStatus: { ok: true, mapped: 0, unmapped: { locations: 0, alumni: 0 } },
+            alumniViewer: {
+                open: false, city: '', province: '', course: null, label: '',
+                total: 0, index: 0, item: null, loading: false, error: ''
+            }
         }
     },
     mounted() {
@@ -79,7 +85,9 @@ createApp({
         window.removeEventListener('resize', this.handleResize);
         window.removeEventListener('pagehide', this._onLeave);
         document.removeEventListener('click', this.handleClickOutsideProfile);
+        document.removeEventListener('keydown', this.onViewerKey);
         try { this._dashAbort && this._dashAbort.abort(); } catch (e) {}
+        try { this._alumniMap && this._alumniMap.destroy(); } catch (e) {}
     },
     watch: {
         darkMode(val) {
@@ -147,13 +155,17 @@ createApp({
             const gone = (e) => e && e.name === 'AbortError';
 
             try {
+                // 0. map — independent of the requests below: Leaflet is static files + one small cached, viewport-sized
+                //    request (no geocoding on this path any more), so it no longer waits for the charts.
+                this.initMap();
+
                 // 1. profile — tiny; fills the header immediately
                 try {
                     const p = await getJson('admin_profile?action=details');
                     if (p && p.success && p.profile) this.profile = p.profile;
                 } catch (e) { if (gone(e)) return; }
 
-                // 2. stats — charts + map data
+                // 2. stats — charts and the summary cards
                 try {
                     this.dashboardStats = await getJson('/admin_dashboard?action=stats');
                     await this.$nextTick();
@@ -174,10 +186,6 @@ createApp({
                         this.renderAlignmentChart();
                     }
                 } catch (e) { if (gone(e)) return; }
-
-                // 5. map last — its geocode call is the slowest tail; if the
-                //    user already navigated we never even fire it.
-                if (!signal.aborted) this.initMap();
             } catch (e) {
                 if (!gone(e)) console.error('Dashboard data load failed:', e);
             }
@@ -463,120 +471,131 @@ createApp({
             }
         },
         async initMap() {
+            if (this._alumniMap || this._alumniMapStarting || !window.AlumniMap) return;
+            this._alumniMapStarting = true;
             try {
-                if (window.LibLoader) { await LibLoader.ensureLeaflet(); }
-                const map = L.map('alumniMap').setView([14.1667, 121.2167], 10);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; OpenStreetMap contributors'
-                }).addTo(map);
-
-                if (this.dashboardStats && this.dashboardStats.alumni_map) {
-                    // C1: the payload is now one summary per location. The
-                    // per-alumnus list is fetched lazily when a popup opens.
-                    const entries = Object.entries(this.dashboardStats.alumni_map);
-
-                    const summaryHtml = (location, cluster) => {
-                        const courses = (cluster.top_courses || [])
-                            .map(c => `<span style='font-size:12px;'>${c.course} <b>(${c.count})</b></span>`)
-                            .join('<br>');
-                        return `<div class='alumni-cluster' data-city="${encodeURIComponent(cluster.city)}" data-province="${encodeURIComponent(cluster.province)}">
-                            <b>${location}</b><br><br>
-                            <span style='font-size:12px;'>Alumni: <b>${cluster.count}</b> &nbsp;|&nbsp; Employed: <b>${cluster.employed}</b></span>
-                            ${courses ? `<div style='margin-top:6px;'>${courses}</div>` : ''}
-                            <button type='button' class='alumni-cluster-view'
-                                style='margin-top:8px;padding:4px 10px;font-size:12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;'>
-                                View alumni (${cluster.count})
-                            </button>
-                        </div>`;
-                    };
-
-                    const alumniCardHtml = (a) => `
-                        <div style='margin-bottom:10px;'>
-                            ${a.profile_pic ? `<div style='text-align:center;margin-bottom:4px;'><img src='${a.profile_pic}' style='width:48px;height:48px;object-fit:cover;border-radius:50%;border:2px solid #3b82f6;'></div>` : ''}
-                            <b>${a.name}</b><br>
-                            <span style='font-size:12px;'>${a.course} (${a.year_graduated})</span><br>
-                            <span style='font-size:12px;'>Status: <b>${a.status}</b></span><br>
-                            ${a.status === 'Employed' && a.work_details ? `
-                                <div style='margin-top:4px; padding-left:8px; border-left:2px solid #3b82f6;'>
-                                    <span style='font-size:12px;'><b>Position:</b> ${a.work_details.title}</span><br>
-                                    <span style='font-size:12px;'><b>Company:</b> ${a.work_details.company}</span><br>
-                                    <span style='font-size:12px;'><b>From:</b> ${a.work_details.start_date || '-'} <b>To:</b> ${a.work_details.end_date || 'Present'}</span><br>
-                                    <span style='font-size:12px;'><b>Description:</b> ${a.work_details.description || '-'}</span>
-                                </div>
-                            ` : ''}
-                        </div>`;
-
-                    const listHtml = (location, city, province, data, page) => {
-                        const pages = Math.max(1, Math.ceil(data.total / data.per_page));
-                        const cards = data.alumni.map(alumniCardHtml).join('<hr style="margin:6px 0;">');
-                        return `<div class='alumni-cluster-list' data-city="${encodeURIComponent(city)}" data-province="${encodeURIComponent(province)}" data-page="${page}" data-pages="${pages}">
-                            <b>${location}</b> <span style='font-size:12px;color:#6b7280;'>(${data.total} alumni)</span><br><br>
-                            ${cards || `<span style='font-size:12px;'>No alumni found.</span>`}
-                            <div style='display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;'>
-                                <button type='button' class='alumni-page-prev' ${page <= 1 ? 'disabled' : ''} style='padding:3px 8px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;'>‹ Prev</button>
-                                <span>Page ${page} / ${pages}</span>
-                                <button type='button' class='alumni-page-next' ${page >= pages ? 'disabled' : ''} style='padding:3px 8px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;'>Next ›</button>
-                            </div>
-                        </div>`;
-                    };
-
-                    const loadPage = async (marker, city, province, location, page) => {
-                        const popup = marker.getPopup();
-                        popup.setContent(`<b>${location}</b><br><br><span style='font-size:12px;'>Loading…</span>`);
-                        try {
-                            const res = await fetch(`/admin_dashboard?action=alumniAtLocation&city=${encodeURIComponent(city)}&province=${encodeURIComponent(province)}&page=${page}`);
-                            const data = await res.json();
-                            if (!data.success) { popup.setContent(`<b>${location}</b><br><br><span style='font-size:12px;'>Could not load alumni.</span>`); return; }
-                            popup.setContent(listHtml(location, city, province, data, page));
-                        } catch (e) {
-                            popup.setContent(`<b>${location}</b><br><br><span style='font-size:12px;'>Could not load alumni.</span>`);
-                        }
-                    };
-
-                    const addMarker = (location, cluster, lat, lng) => {
-                        const marker = L.marker([lat, lng]).addTo(map).bindPopup(summaryHtml(location, cluster));
-                        marker.on('popupopen', (e) => {
-                            const el = e.popup.getElement();
-                            if (!el) return;
-                            const viewBtn = el.querySelector('.alumni-cluster-view');
-                            if (viewBtn) {
-                                viewBtn.onclick = () => loadPage(marker, cluster.city, cluster.province, location, 1);
-                            }
-                            const prev = el.querySelector('.alumni-page-prev');
-                            const next = el.querySelector('.alumni-page-next');
-                            const wrap = el.querySelector('.alumni-cluster-list');
-                            if (wrap && prev) prev.onclick = () => loadPage(marker, cluster.city, cluster.province, location, Math.max(1, parseInt(wrap.dataset.page, 10) - 1));
-                            if (wrap && next) next.onclick = () => loadPage(marker, cluster.city, cluster.province, location, Math.min(parseInt(wrap.dataset.pages, 10), parseInt(wrap.dataset.page, 10) + 1));
-                        });
-                    };
-
-                    // Geocoded server-side (and cached there permanently) instead of through
-                    // a browser-side third-party CORS proxy — that proxy (api.allorigins.win)
-                    // is no longer reachable, which was silently collapsing every location
-                    // onto the same fallback point and making the whole map look like one marker.
-                    const coordinates = await this.geocodeLocations(entries.map(([location]) => location));
-                    entries.forEach(([location, cluster]) => {
-                        const coords = coordinates[location] || { lat: 14.1667, lng: 121.2167 };
-                        addMarker(location, cluster, coords.lat, coords.lng);
-                    });
-                }
+                this._alumniMap = await window.AlumniMap.create({
+                    container: 'alumniMap',
+                    signal: this._dashAbort ? this._dashAbort.signal : undefined,
+                    onView: (view) => this.openAlumniViewer(view),
+                    onStatus: (status) => { if (status.ok) this.mapStatus = status; }
+                });
             } catch (e) {
                 console.error('Map initialization error:', e);
+            } finally {
+                this._alumniMapStarting = false;
             }
         },
-        async geocodeLocations(locations) {
-            try {
-                const response = await fetch('/admin_dashboard?action=geocode', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ locations }),
-                    signal: this._dashAbort ? this._dashAbort.signal : undefined
-                });
-                const data = await response.json();
-                return data.success ? data.coordinates : {};
-            } catch (error) {
-                return {};
+
+        // ---- one-alumnus-at-a-time viewer (opened from a map pin's popup) ----
+        openAlumniViewer(view) {
+            this._vCache = new Map();      // index -> alumnus (this location + program only)
+            this._vInflight = new Map();   // index -> Promise
+            this._vSeq = 0;
+            this.alumniViewer = {
+                open: true, city: view.city, province: view.province, course: view.course || null, label: view.label,
+                total: view.total, index: 0, item: null, loading: true, error: ''
+            };
+            document.addEventListener('keydown', this.onViewerKey);
+            this.viewerShow(0, 1);
+            this.$nextTick(() => { if (this.$refs.viewerBack) this.$refs.viewerBack.focus(); });
+        },
+        closeAlumniViewer() {
+            document.removeEventListener('keydown', this.onViewerKey);
+            this._vSeq = (this._vSeq || 0) + 1;
+            this._vCache = null;
+            this._vInflight = null;
+            this.alumniViewer = { ...this.alumniViewer, open: false, item: null, loading: false, error: '' };
+        },
+        onViewerKey(e) {
+            if (!this.alumniViewer.open) return;
+            const tag = ((e.target && e.target.tagName) || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+            if (e.key === 'ArrowRight') { e.preventDefault(); this.viewerGo(1); }
+            else if (e.key === 'ArrowLeft') { e.preventDefault(); this.viewerGo(-1); }
+            else if (e.key === 'Escape') { e.preventDefault(); this.closeAlumniViewer(); }
+        },
+        viewerGo(delta) {
+            const v = this.alumniViewer;
+            const next = v.index + delta;
+            if (!v.open || next < 0 || next >= v.total) return;
+            this.viewerShow(next, delta);
+        },
+        viewerFetch(index) {
+            const cached = this._vCache && this._vCache.get(index);
+            if (cached) return Promise.resolve({ alumnus: cached, total: null });
+            if (this._vInflight && this._vInflight.has(index)) return this._vInflight.get(index);
+
+            const v = this.alumniViewer;
+            const cache = this._vCache;
+            const inflight = this._vInflight;
+            let url = `/admin_dashboard?action=alumniViewer&city=${encodeURIComponent(v.city)}&province=${encodeURIComponent(v.province)}&index=${index}`;
+            if (v.course) url += `&course=${encodeURIComponent(v.course)}`;
+
+            const p = fetch(url, { signal: this._dashAbort ? this._dashAbort.signal : undefined })
+                .then((r) => r.json())
+                .then((data) => {
+                    if (!data.success) throw new Error(data.message || 'Request failed');
+                    if (data.alumnus && cache) {
+                        cache.set(index, data.alumnus);
+                        if (cache.size > 40) cache.delete(cache.keys().next().value);   // bounded memory
+                    }
+                    return data;
+                })
+                .finally(() => { if (inflight) inflight.delete(index); });
+            if (inflight) inflight.set(index, p);
+            return p;
+        },
+        async viewerShow(index, direction) {
+            const v = this.alumniViewer;
+            const seq = ++this._vSeq;
+            v.index = index;
+            v.error = '';
+
+            const cached = this._vCache && this._vCache.get(index);
+            if (cached) {
+                v.item = cached;
+                v.loading = false;
+                this.viewerPrefetch(index, direction);
+                return;
             }
+
+            v.item = null;
+            v.loading = true;
+            try {
+                const data = await this.viewerFetch(index);
+                if (seq !== this._vSeq || !this.alumniViewer.open) return;   // user moved on / closed
+                if (data.total !== null && data.total !== undefined) v.total = data.total;
+                if (!data.alumnus) {
+                    v.error = 'This record is no longer available - the list may have changed.';
+                    v.loading = false;
+                    return;
+                }
+                v.item = data.alumnus;
+                v.loading = false;
+                this.viewerPrefetch(index, direction);
+            } catch (e) {
+                if (seq !== this._vSeq || (e && e.name === 'AbortError')) return;
+                v.error = 'Could not load this alumnus.';
+                v.loading = false;
+            }
+        },
+        // Warm the neighbour in the direction of travel so the next click is instant. Failures are ignored: the click
+        // simply fetches it then.
+        viewerPrefetch(index, direction) {
+            const v = this.alumniViewer;
+            const n = index + (direction < 0 ? -1 : 1);
+            if (n < 0 || n >= v.total || !this._vCache || this._vCache.has(n) || this._vInflight.has(n)) return;
+            this.viewerFetch(n).catch(() => {});
+        },
+        viewerInitials(name) {
+            return (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+        },
+        viewerRetry() {
+            this.viewerShow(this.alumniViewer.index, 1);
+        },
+        viewerRestart() {
+            this.viewerShow(0, 1);
         },
         confirmLogout() {
             this.showLogoutModal = true;

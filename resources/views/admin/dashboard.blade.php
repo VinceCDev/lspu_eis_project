@@ -116,7 +116,69 @@
 
 <div class="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-6 mb-6">
     <h5 class="font-semibold text-lg dark:text-gray-200 mb-4">Alumni Location Map</h5>
-    <div id="alumniMap" class="h-96 rounded-lg z-0"></div>
+    <div class="alumni-map-wrap">
+        <div id="alumniMap" class="h-96 rounded-lg z-0"></div>
+
+        <!-- One alumnus at a time. Sits over the map (the map is never re-created), so Back to Map keeps its centre, zoom and open pin. -->
+        <div v-if="alumniViewer.open" class="amv-panel" role="dialog" :aria-label="'Alumni in ' + alumniViewer.label" :aria-busy="alumniViewer.loading ? 'true' : 'false'">
+            <div class="amv-head">
+                <button type="button" ref="viewerBack" class="amv-btn" @click="closeAlumniViewer"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to Map</button>
+                <div class="amv-where" :title="alumniViewer.label + (alumniViewer.course ? ' - ' + alumniViewer.course : '')">
+                    {{ alumniViewer.label }}<span v-if="alumniViewer.course"> &middot; {{ alumniViewer.course }}</span>
+                </div>
+                <div class="amv-pos" aria-live="polite">
+                    <template v-if="alumniViewer.total > 0">Alumni {{ alumniViewer.index + 1 }} of {{ alumniViewer.total }}</template>
+                    <template v-else>No alumni</template>
+                </div>
+            </div>
+
+            <div class="amv-body">
+                <template v-if="alumniViewer.item">
+                    <div class="amv-person">
+                        <img v-if="alumniViewer.item.profile_pic" class="amv-avatar" :src="'/' + alumniViewer.item.profile_pic" alt="">
+                        <div v-else class="amv-avatar-empty" aria-hidden="true">{{ viewerInitials(alumniViewer.item.name) }}</div>
+                        <div>
+                            <h6 class="amv-name">{{ alumniViewer.item.name }}</h6>
+                            <p class="amv-sub">{{ alumniViewer.item.course }} ({{ alumniViewer.item.year_graduated }})<span v-if="alumniViewer.item.college"> &middot; {{ alumniViewer.item.college }}</span></p>
+                            <span class="amv-badge" :class="alumniViewer.item.status === 'Employed' ? 'employed' : 'unemployed'">{{ alumniViewer.item.status }}</span>
+                        </div>
+                    </div>
+                    <div v-if="alumniViewer.item.work_details" class="amv-work">
+                        <dl class="amv-grid">
+                            <dt>Position</dt><dd>{{ alumniViewer.item.work_details.title || '-' }}</dd>
+                            <dt>Company</dt><dd>{{ alumniViewer.item.work_details.company || '-' }}</dd>
+                            <dt>From</dt><dd>{{ alumniViewer.item.work_details.start_date || '-' }}</dd>
+                            <dt>To</dt><dd>{{ alumniViewer.item.work_details.end_date || 'Present' }}</dd>
+                            <template v-if="alumniViewer.item.work_details.employment_status"><dt>Employment</dt><dd>{{ alumniViewer.item.work_details.employment_status }}</dd></template>
+                            <template v-if="alumniViewer.item.work_details.sector"><dt>Sector</dt><dd>{{ alumniViewer.item.work_details.sector }}</dd></template>
+                            <template v-if="alumniViewer.item.work_details.location_of_work"><dt>Work location</dt><dd>{{ alumniViewer.item.work_details.location_of_work }}</dd></template>
+                            <template v-if="alumniViewer.item.work_details.relevance"><dt>Relevance</dt><dd>{{ alumniViewer.item.work_details.relevance }}</dd></template>
+                            <dt>Description</dt><dd>{{ alumniViewer.item.work_details.description || '-' }}</dd>
+                        </dl>
+                    </div>
+                    <p v-else class="amv-muted">No current employment on record.</p>
+                </template>
+                <div v-else-if="alumniViewer.error">
+                    <p class="amv-error">{{ alumniViewer.error }}</p>
+                    <button type="button" class="amv-btn" @click="viewerRetry">Retry</button>
+                    <button type="button" class="amv-btn" @click="viewerRestart">Start over</button>
+                </div>
+                <div v-else aria-hidden="true">
+                    <div class="amv-skel" style="width:55%"></div>
+                    <div class="amv-skel" style="width:80%"></div>
+                    <div class="amv-skel" style="width:65%"></div>
+                </div>
+            </div>
+
+            <div class="amv-foot">
+                <button type="button" class="amv-btn" :disabled="alumniViewer.index <= 0" @click="viewerGo(-1)"><i class="fas fa-arrow-left" aria-hidden="true"></i> Previous</button>
+                <button type="button" class="amv-btn amv-btn-primary" :disabled="alumniViewer.index >= alumniViewer.total - 1" @click="viewerGo(1)">Next <i class="fas fa-arrow-right" aria-hidden="true"></i></button>
+            </div>
+        </div>
+    </div>
+    <p v-if="mapStatus.unmapped && mapStatus.unmapped.alumni > 0" class="amv-note">
+        {{ mapStatus.unmapped.alumni }} alumni in {{ mapStatus.unmapped.locations }} locations are not shown yet &mdash; their address could not be placed on the map.
+    </p>
 </div>
 
 <!-- Employment Status per Program, single-campus Modal -->

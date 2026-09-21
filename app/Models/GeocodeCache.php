@@ -16,11 +16,14 @@ class GeocodeCache
             return [];
         }
 
-        $placeholders = implode(',', array_fill(0, count($keys), '?'));
-
+        // Chunked: at bulk-import scale the free-text city column yields well over PDO's 65,535-placeholder limit of
+        // distinct "City, Province" keys, and one giant IN() would fail outright.
         $out = [];
-        foreach ($this->selectAll("SELECT location_key, lat, lng FROM location_geocode_cache WHERE location_key IN ({$placeholders})", $keys) as $row) {
-            $out[$row['location_key']] = ['lat' => (float) $row['lat'], 'lng' => (float) $row['lng']];
+        foreach (array_chunk(array_values($keys), 5000) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            foreach ($this->selectAll("SELECT location_key, lat, lng FROM location_geocode_cache WHERE location_key IN ({$placeholders})", $chunk) as $row) {
+                $out[$row['location_key']] = ['lat' => (float) $row['lat'], 'lng' => (float) $row['lng']];
+            }
         }
 
         return $out;

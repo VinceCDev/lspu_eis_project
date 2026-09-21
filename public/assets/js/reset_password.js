@@ -29,6 +29,7 @@ window.addEventListener('DOMContentLoaded', function() {
                         message.value = data.message || 'Password successfully changed.';
                         messageType.value = 'success';
                         setTimeout(() => { window.location.href = 'login'; }, 2000);
+                        return; // keep the button in its loading state until the redirect
                     } else {
                         message.value = data.message || 'Error resetting password.';
                         messageType.value = 'error';

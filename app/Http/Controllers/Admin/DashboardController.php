@@ -7,7 +7,12 @@ use App\Models\Campus;
 use App\Models\DashboardStats;
 use App\Models\GeocodeCache;
 use App\Services\AlignmentService;
+use App\Services\AlumniLocationViewer;
+use App\Services\AlumniMapService;
 use App\Services\Auth;
+use App\Services\LocationGeocoder;
+use App\Services\ReportingSummary;
+use App\Support\HeavyCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -22,13 +27,19 @@ class DashboardController extends Controller
             'title' => (Auth::role() === 'superadmin' ? 'Super Administrator Dashboard' : 'Administrator Dashboard').' | LSPU - EIS',
             'active' => Auth::role() === 'superadmin' ? 'superadmin_dashboard' : 'admin_dashboard',
             'pageJs' => 'admin_dashboard.js',
-            'extraHead' => '<link rel="stylesheet" href="'.asset('assets/vendor/leaflet/leaflet.css').'">',
+            'extraHead' => '<link rel="stylesheet" href="'.asset('assets/vendor/leaflet/leaflet.css').'">'
+                .'<link rel="stylesheet" href="'.asset('assets/vendor/leaflet-markercluster/MarkerCluster.css').'">'
+                .'<link rel="stylesheet" href="'.asset('assets/vendor/leaflet-markercluster/MarkerCluster.Default.css').'">'
+                .'<link rel="stylesheet" href="'.asset('assets/css/alumni_map.css').'?v='.(@filemtime(public_path('assets/css/alumni_map.css')) ?: 0).'">',
             // Chart.js (~200 KB) and Leaflet (~148 KB) are NOT needed to
             // render the dashboard shell — they are lazy-loaded on demand by
             // admin_dashboard.js (via LibLoader) once the stats/map data is
             // ready, so the sidebar/header/icons paint without waiting for
             // them. Only the tiny per-request flag is inlined here.
-            'extraScripts' => '<script>window.IS_SUPERADMIN = '.json_encode(Auth::role() === 'superadmin').';</script>',
+            'extraScripts' => '<script>window.IS_SUPERADMIN = '.json_encode(Auth::role() === 'superadmin').';</script>'
+                // Alumni Location map controller (Leaflet itself + markercluster stay lazy via LibLoader). Deferred, and
+                // versioned by mtime like the page script so a deploy is never served from a stale browser cache.
+                .'<script defer src="'.asset('assets/js/alumni_map.js').'?v='.(@filemtime(public_path('assets/js/alumni_map.js')) ?: 0).'"></script>',
         ]);
     }
 
@@ -36,20 +47,22 @@ class DashboardController extends Controller
     {
         $campusId = Auth::role() === 'superadmin' ? null : Auth::campusId();
 
-        $payload = Cache::remember(
+        // Cache miss = build from the summary tables (milliseconds), not from a scan of the alumni tables (98 s at 1M).
+        $payload = HeavyCache::remember(
             'dashboard_stats:'.($campusId ?? 'all'),
-            120,
+            (int) config('reporting.cache_fresh'),
+            (int) config('reporting.cache_keep'),
             function () use ($campusId) {
                 $stats = new DashboardStats($campusId);
 
+                // The alumni location map is NOT part of this payload: it has its own cached, viewport-aware
+                // endpoint (alumniMap) so the charts don't wait for it and it doesn't ride along in every stats fetch.
                 return array_merge(
                     $stats->chartBreakdowns(),
-                    $stats->totalsForCards(),
-                    [
-                        'alumni_map' => $stats->alumniMap(),
-                    ]
+                    $stats->totalsForCards()
                 );
-            }
+            },
+            [ReportingSummary::scopeFor($campusId)]
         );
 
         return response()->json($payload);
@@ -68,10 +81,12 @@ class DashboardController extends Controller
         set_time_limit(180);
 
         try {
-            $alignment = Cache::remember(
+            $alignment = HeavyCache::remember(
                 'dashboard_course_work_alignment:'.($campusId ?? 'all'),
-                600,
-                fn () => (new AlignmentService())->classify((new DashboardStats($campusId))->currentCourseJobTitles())
+                (int) config('reporting.cache_fresh'),
+                (int) config('reporting.cache_keep'),
+                fn () => (new AlignmentService())->classify((new DashboardStats($campusId))->currentCourseJobTitleCounts()),
+                [ReportingSummary::scopeFor($campusId)]
             );
 
             return response()->json(['success' => true, 'course_work_alignment' => $alignment]);
@@ -87,7 +102,7 @@ class DashboardController extends Controller
         $isSuperadmin = Auth::role() === 'superadmin';
         $cacheKey = 'dashboard_employment_status_by_campus:'.($isSuperadmin ? 'all' : Auth::campusId());
 
-        $data = Cache::remember($cacheKey, 300, function () use ($isSuperadmin) {
+        $data = HeavyCache::remember($cacheKey, (int) config('reporting.cache_fresh'), (int) config('reporting.cache_keep'), function () use ($isSuperadmin) {
             // C4: authorised campus list first, then ONE grouped pass for all
             // of them instead of a 4-query loop per campus.
             $campuses = $isSuperadmin
@@ -115,7 +130,7 @@ class DashboardController extends Controller
             }
 
             return $out;
-        });
+        }, [ReportingSummary::scopeFor($isSuperadmin ? null : Auth::campusId())]);
 
         return response()->json(['success' => true, 'campuses' => $data]);
     }
@@ -144,6 +159,68 @@ class DashboardController extends Controller
         return response()->json(['success' => true] + $result);
     }
 
+    /**
+     * Alumni Location map data for the visible viewport. Optional query: north, south, east, west (degrees) and zoom;
+     * without bounds every mapped location is returned. Reads only cached data — never geocodes.
+     */
+    public function alumniMap(Request $request): JsonResponse
+    {
+        $campusId = Auth::role() === 'superadmin' ? null : Auth::campusId();
+
+        $bounds = null;
+        $b = array_map(static fn ($k) => $request->query($k), ['north', 'south', 'east', 'west']);
+        if (count(array_filter($b, 'is_numeric')) === 4) {
+            $bounds = ['north' => (float) $b[0], 'south' => (float) $b[1], 'east' => (float) $b[2], 'west' => (float) $b[3]];
+        }
+        $zoom = max(0, min(19, (int) $request->query('zoom', '10')));
+
+        // Read-only endpoint: don't keep other requests from this admin waiting on the session lock.
+        if (Session::isStarted()) {
+            Session::save();
+        }
+
+        $dataset = (new AlumniMapService())->dataset($campusId);
+        $slice = AlumniMapService::slice($dataset, $bounds, $zoom);
+
+        return response()->json([
+            'success' => true,
+            'mode' => $slice['mode'],
+            'in_view' => $slice['in_view'],
+            'total_mapped' => count($dataset['locations']),
+            'unmapped' => $dataset['unmapped'],
+            'locations' => $slice['locations'],
+        ]);
+    }
+
+    /**
+     * One alumnus of a map location (0-based `index`), in a fixed order, plus the location's total; `course` narrows to
+     * one program. See AlumniLocationViewer.
+     */
+    public function alumniViewer(Request $request): JsonResponse
+    {
+        $campusId = Auth::role() === 'superadmin' ? null : Auth::campusId();
+        $city = trim((string) $request->query('city', ''));
+        $province = trim((string) $request->query('province', ''));
+
+        if ($city === '' || $province === '') {
+            return response()->json(['success' => false, 'message' => 'city and province are required.']);
+        }
+
+        if (Session::isStarted()) {
+            Session::save();
+        }
+
+        $result = (new AlumniLocationViewer())->at(
+            $campusId,
+            $city,
+            $province,
+            ($course = trim((string) $request->query('course', ''))) === '' ? null : $course,
+            (int) $request->query('index', '0')
+        );
+
+        return response()->json(['success' => true] + $result);
+    }
+
     public function collegeEmploymentStatus(Request $request): JsonResponse
     {
         $campusId = Auth::role() === 'superadmin'
@@ -163,12 +240,21 @@ class DashboardController extends Controller
             }
         }
 
+        // was uncached: every college click re-ran three GROUP BY joins over the campus's alumni
+        $perProgram = HeavyCache::remember(
+            'dashboard_college_status:'.$campusId.':'.md5($college),
+            (int) config('reporting.cache_fresh'),
+            (int) config('reporting.cache_keep'),
+            fn () => (new DashboardStats($campusId, $college))->employmentStatusPerProgram(),
+            [ReportingSummary::scopeFor($campusId)]
+        );
+
         return response()->json([
             'success' => true,
             'campus_id' => $campusId,
             'campus_name' => $campusName,
             'college' => $college,
-            'employment_status_per_program' => (new DashboardStats($campusId, $college))->employmentStatusPerProgram(),
+            'employment_status_per_program' => $perProgram,
         ]);
     }
 
@@ -197,9 +283,10 @@ class DashboardController extends Controller
             $cache = new GeocodeCache();
             $coordinates = $cache->getMany($locations);
 
+            $geocoder = new LocationGeocoder();
             $missing = array_values(array_filter(
                 array_diff($locations, array_keys($coordinates)),
-                fn (string $loc) => $this->looksLikePlace($loc)
+                fn (string $loc) => $geocoder->looksLikePlace($loc)
             ));
 
             if (Session::isStarted()) {
@@ -211,13 +298,13 @@ class DashboardController extends Controller
                 if ($done >= self::MAX_GEOCODE_LOOKUPS) {
                     break;
                 }
-                $coords = $this->geocodeViaNominatim($location);
+                $coords = $geocoder->lookup($location);
                 $done++;
                 if ($coords !== null) {
                     $cache->set($location, $coords['lat'], $coords['lng']);
                     $coordinates[$location] = $coords;
                 }
-                usleep(1100000);
+                usleep(LocationGeocoder::SLEEP_MICROSECONDS);
             }
         } catch (\Throwable $e) {
             report($e);
@@ -226,43 +313,5 @@ class DashboardController extends Controller
         }
 
         return response()->json(['success' => true, 'coordinates' => $coordinates]);
-    }
-
-    /** Cheap filter: a real "City, Province" has no house numbers, street or barangay tokens. */
-    private function looksLikePlace(string $s): bool
-    {
-        if ($s === '' || mb_strlen($s) > 80 || preg_match('/\d/', $s)) {
-            return false;
-        }
-
-        return !preg_match('/\b(brgy|barangay|purok|sitio|blk|block|lot|phase|st\.?|street|ave|avenue|subd|subdivision|#)\b/i', $s);
-    }
-
-    /** @return array{lat: float, lng: float}|null */
-    private function geocodeViaNominatim(string $location): ?array
-    {
-        $url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q='
-            .urlencode($location.', Philippines');
-
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 8,
-            CURLOPT_USERAGENT => 'LSPU-EIS-AlumniMap/1.0',
-        ]);
-        $response = curl_exec($ch);
-        $ok = $response !== false && curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200;
-        curl_close($ch);
-
-        if (!$ok) {
-            return null;
-        }
-
-        $data = json_decode($response, true);
-        if (!is_array($data) || empty($data[0]['lat']) || empty($data[0]['lon'])) {
-            return null;
-        }
-
-        return ['lat' => (float) $data[0]['lat'], 'lng' => (float) $data[0]['lon']];
     }
 }

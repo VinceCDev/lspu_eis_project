@@ -43,6 +43,13 @@
             if (global.L) return Promise.resolve();
             return loadScript('/assets/vendor/leaflet/leaflet.js');
         },
+        // Marker clustering for the alumni location map (stylesheets are linked in the dashboard's <head>).
+        ensureMarkerCluster: function () {
+            return this.ensureLeaflet().then(function () {
+                if (global.L && global.L.markerClusterGroup) return;
+                return loadScript('/assets/vendor/leaflet-markercluster/leaflet.markercluster.js');
+            });
+        },
         ensureXLSX: function () {
             if (global.XLSX) return Promise.resolve();
             return loadScript('/assets/vendor/xlsx/xlsx.full.min.js');
