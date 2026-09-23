@@ -23,7 +23,11 @@ class GeminiClient
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+            // Measured live: gemini-flash-latest's own Server-Timing regularly reads ~9-11s, i.e. right at the edge of
+            // a 10s cURL timeout — that made a normal, successful-but-slow reply read as a failure and get retried
+            // (up to 3x per call), which is what let a handful of live lookups blow past PHP's execution limit
+            // (see ReportController::beforeSlowClassification()). 20s gives real replies headroom to land as a hit.
+            curl_setopt($ch, CURLOPT_TIMEOUT, 20);
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Content-Type: application/json',
                 'X-goog-api-key: '.$apiKey,

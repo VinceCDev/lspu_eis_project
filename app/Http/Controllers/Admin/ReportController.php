@@ -13,6 +13,7 @@ use App\Support\HeavyCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Session;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
@@ -40,6 +41,8 @@ class ReportController extends Controller
         $campusId = $this->resolveCampusId($request->query('campus_id'));
         $college = $request->query('college');
         $yearGraduated = $this->resolveYearGraduated($request->query('year_graduated'));
+
+        $this->beforeSlowClassification();
 
         // Aggregated report figures change only when alumni/experience data
         // does (imports, edits) — a short TTL keeps the page snappy and stops
@@ -77,6 +80,8 @@ class ReportController extends Controller
             ], 422);
         }
 
+        $this->beforeSlowClassification();
+
         $data = HeavyCache::remember(
             $this->reportCacheKey('full', $campusId, $college, $yearGraduated),
             (int) config('reporting.cache_fresh'),
@@ -87,6 +92,23 @@ class ReportController extends Controller
         $data['campus_name'] = $campusId !== null ? $this->campusName($campusId) : 'All Campuses';
 
         return response()->json($data);
+    }
+
+    /**
+     * On a cold cache, summary()/fullData()/emailReport() classify every distinct (course, job title) pair in scope,
+     * which can make up to AlignmentService::MAX_LIVE_LOOKUPS live Gemini calls (measured live: ~9-11s each; the
+     * per-call cURL timeout is 10s, so a slow-but-real reply reads as a failure and gets retried up to 3x — up to
+     * ~31s for one pair). That alone can exceed PHP's default 60s max_execution_time before the pair-level circuit
+     * breaker even trips, which is NOT a catchable exception — the request dies mid-response and the browser gets an
+     * HTML error page where it expected JSON ("Unexpected token '<'"). DashboardController::courseWorkAlignment()
+     * already carries this same fix for its identical call path; these three actions were missing it.
+     */
+    private function beforeSlowClassification(): void
+    {
+        if (Session::isStarted()) {
+            Session::save();
+        }
+        set_time_limit(180);
     }
 
     /** Scope-specific cache key (campus + college + year); never user-specific. */
@@ -122,6 +144,7 @@ class ReportController extends Controller
         $yearGraduated = $this->resolveYearGraduated($request->input('year_graduated'));
         $scopeLabel = $college ?: ($campusId !== null ? $this->campusName($campusId) : 'All Campuses');
 
+        $this->beforeSlowClassification();
         $summary = $this->cachedSummary($campusId, $college, $yearGraduated);
 
         $filenameScope = preg_replace('/[^A-Za-z0-9]+/', '_', $scopeLabel) ?: 'Report';
