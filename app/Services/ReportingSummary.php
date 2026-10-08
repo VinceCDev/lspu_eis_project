@@ -309,10 +309,10 @@ final class ReportingSummary
 
                 $counts['rpt_location'] = $conn->affectingStatement(
                     "INSERT INTO rpt_location (campus_id, city, province, course, alumni_count, employed_count)
-                     SELECT ?, a.city, a.province, a.course, COUNT(*), SUM(COALESCE(f.active, 0))
+                     SELECT ?, COALESCE(a.city, ''), COALESCE(a.province, ''), a.course, COUNT(*), SUM(COALESCE(f.active, 0))
                      FROM alumni a LEFT JOIN tmp_rpt_flags f ON f.alumni_id = a.alumni_id
-                     WHERE a.city <> '' AND a.province <> '' AND {$cond}
-                     GROUP BY a.city, a.province, a.course",
+                     WHERE (COALESCE(a.city, '') <> '' OR COALESCE(a.province, '') <> '') AND {$cond}
+                     GROUP BY COALESCE(a.city, ''), COALESCE(a.province, ''), a.course",
                     [$partition, ...$bind]
                 );
             });

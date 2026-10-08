@@ -539,20 +539,20 @@ class DashboardStats
      */
     public function alumniMap(): array
     {
-        $sql = "SELECT a.city, a.province, a.course,
+        $sql = "SELECT COALESCE(a.city, '') AS city, COALESCE(a.province, '') AS province, a.course,
                        COUNT(DISTINCT a.alumni_id) AS n,
                        COUNT(DISTINCT CASE
                              WHEN e.current = 1 OR e.end_date IS NULL OR e.end_date >= CURDATE()
                              THEN e.alumni_id END) AS employed
                 FROM alumni a
                 LEFT JOIN alumni_experience e ON e.alumni_id = a.alumni_id
-                WHERE a.city IS NOT NULL AND a.city <> '' AND a.province IS NOT NULL AND a.province <> ''"
+                WHERE (COALESCE(a.city, '') <> '' OR COALESCE(a.province, '') <> '')"
                 .$this->campusClause('a').'
                 GROUP BY a.city, a.province, a.course';
 
         $clusters = [];
         foreach ($this->summary()?->locationClusters() ?? $this->selectAll($sql) as $row) {
-            $key = $row['city'].', '.$row['province'];
+            $key = \App\Services\LocationGeocoder::key($row['city'], $row['province']);
             if (!isset($clusters[$key])) {
                 $clusters[$key] = [
                     'city' => $row['city'],

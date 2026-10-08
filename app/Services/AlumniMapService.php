@@ -66,7 +66,7 @@ class AlumniMapService
         $rows = DB::cursor(
             "SELECT l.city, l.province, l.course, SUM(l.alumni_count) AS n, SUM(l.employed_count) AS employed, MAX(g.lat) AS lat, MAX(g.lng) AS lng
              FROM rpt_location l
-             LEFT JOIN location_geocode_cache g ON g.location_key = CONCAT(l.city, ', ', l.province)
+             LEFT JOIN location_geocode_cache g ON g.location_key = CONCAT_WS(', ', NULLIF(l.city, ''), NULLIF(l.province, ''))
              WHERE 1 = 1{$w}
              GROUP BY l.city, l.province, l.course
              ORDER BY l.city, l.province",

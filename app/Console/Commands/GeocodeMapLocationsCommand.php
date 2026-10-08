@@ -37,7 +37,7 @@ class GeocodeMapLocationsCommand extends Command
         foreach ($clusters as $key => $c) {
             // Not filtered by looksLikePlace() any more: an address-like or unknown place falls back to its
             // municipality/city, then its province, instead of staying off the map. Only blank/gibberish is skipped.
-            if (!isset($known[$key]) && ($c['city'] !== '' || $c['province'] !== '') && mb_strlen($key) <= 120) {
+            if (!isset($known[$key]) && mb_strlen($key) <= 200) {
                 $todo[$key] = $c['count'];
             }
         }
