@@ -139,4 +139,48 @@ return [
         'MAEDGC' => 'Master of Arts in Education (Guidance and Counseling)',
         'MAEDTHE' => 'Master of Arts in Education (Technology and Home Economics)',
     ],
+
+    /*
+     * Keyword fallback for program labels that are not an exact code above (typos, abbreviations, free text typed on the
+     * tracer sheet). Tried in order, only when the exact lookup fails. Each rule: [regex, course, college|null].
+     * The regex runs against the label upper-cased with punctuation turned into single spaces ("BSEd - Social Science"
+     * -> "BSED SOCIAL SCIENCE"). college null = derive it from the course via campus_programs.php.
+     */
+    'program_rules' => [
+        // --- Teacher Education (BTVTEd / old BSIE Industrial Education / BSEd / BEEd / CTP) ---
+        ['/^BSIE\b.*\bHE\b|^BSIE\b.*HOME ECON/', 'Bachelor of Technology and Livelihood Education (Home Economics)', null],
+        ['/^(BTVTED?|BSIE)\b.*ELECTRIC/', 'Bachelor of Technical-Vocational Teacher Education (Electrical Technology)', null],
+        ['/^(BTVTED?|BSIE)\b.*ELECTRO/', 'Bachelor of Technical-Vocational Teacher Education (Electronics Technology)', null],
+        ['/^(BTVTED?|BSIE)\b.*(FOOD|FSM)/', 'Bachelor of Technical-Vocational Teacher Education (Food and Service Management)', null],
+        ['/^(BTVTED?|BSIE)\b.*(GARMENT|FASHION)/', 'Bachelor of Technical-Vocational Teacher Education (Garments, Fashion and Design)', null],
+        ['/^(BTVTED?|BSIE)\b.*(AGRI|CROP)/', 'Bachelor of Technical-Vocational Teacher Education (Agricultural Crops Production)', null],
+        ['/^(BTVTED?|BSIE)\b/', 'Bachelor of Technical-Vocational Teacher Education', null],
+        ['/^BS ?ED(UC\w*)?\b.*SOC/', 'Bachelor of Secondary Education (Social Science)', null],
+        ['/^BS ?ED(UC\w*)?\b.*ENG/', 'Bachelor of Secondary Education (English)', null],
+        ['/^BS ?ED(UC\w*)?\b.*FIL/', 'Bachelor of Secondary Education (Filipino)', null],
+        ['/^BS ?ED(UC\w*)?\b.*MATH/', 'Bachelor of Secondary Education (Mathematics)', null],
+        ['/^BS ?ED(UC\w*)?\b.*(SCI|BIO|CHEM|PHYS)/', 'Bachelor of Secondary Education (Science)', null],
+        ['/^BS ?ED(UC\w*)?\b.*MAPEH/', 'Bachelor of Secondary Education (MAPEH)', null],
+        ['/^BS ?ED(UC\w*)?\b.*VALUES/', 'Bachelor of Secondary Education (Values Education)', null],
+        ['/^BS ?ED(UC\w*)?\b.*(TLE|LIVELIHOOD)/', 'Bachelor of Secondary Education (Technology & Livelihood Education)', null],
+        ['/^BS ?ED(UC\w*)?\b/', 'Bachelor of Secondary Education', null],
+        ['/^(BEED|BS ?ELEM\w*)\b/', 'Bachelor of Elementary Education', null],
+        ['/^CTP$|CERTIFICATE.*TEACH/', 'Certificate in Teaching Program', 'College of Teacher Education'],
+
+        // --- Arts & Sciences / Computer Studies ---
+        ['/PSYCH|PYCH/', 'BS Psychology', null],
+        ['/^BS ?INFO(RMATION)?( TECH\w*)?$/', 'BS Information Technology', null],
+
+        // --- Hospitality & Tourism ---
+        ['/TOURISM/', 'BS Tourism Management', null],
+        ['/HOTEL|HRM/', 'BS Hotel and Restaurant Management', null],
+        ['/HOSPITALITY/', 'BS Hospitality Management', null],
+
+        // --- Industrial Technology specialisations typed without the BSIT prefix ---
+        ['/ARCHI\w*.*DRAFT|^DRAFTING/', 'BS Industrial Technology (Architectural Drafting)', null],
+        ['/AUTOMOTIVE/', 'BS Industrial Technology (Automotive Technology)', null],
+        ['/^ELECTRIC/', 'BS Industrial Technology (Electrical Technology)', null],
+        ['/^ELECTRO/', 'BS Industrial Technology (Electronics Technology)', null],
+        ['/^RAC$|HVAC|REFRIG/', 'BS Industrial Technology (Heating, Ventilating, Air-Conditioning and Refrigeration Technology)', null],
+    ],
 ];

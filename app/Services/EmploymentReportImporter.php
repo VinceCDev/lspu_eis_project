@@ -58,6 +58,9 @@ class EmploymentReportImporter
     /** @var array<string,string> upper course name => college */
     private array $courseToCollege = [];
 
+    /** @var array<int, array{0:string,1:string,2:?string}> keyword fallback rules, see import_codes.php */
+    private array $programRules = [];
+
     private bool $sendCredentialEmails;
 
     /** Rows written per transaction / multi-row INSERT / checkpoint (config('import.chunk_size')). */
@@ -127,7 +130,9 @@ class EmploymentReportImporter
             $this->batchSize = max(50, min(10000, (int) config('import.chunk_size', 1000)));
         }
 
-        foreach ((require dirname(__DIR__).'/Config/import_codes.php')['program'] as $code => $name) {
+        $codes = require dirname(__DIR__).'/Config/import_codes.php';
+        $this->programRules = $codes['program_rules'] ?? [];
+        foreach ($codes['program'] as $code => $name) {
             $this->programMap[$this->normCode($code)] = $name;
         }
 
@@ -1037,13 +1042,30 @@ class EmploymentReportImporter
         if ($course === null && isset($this->courseToCollege[mb_strtoupper($raw)])) {
             $course = $raw;
         }
+        $ruleCollege = null;
+        if ($course === null) {
+            [$course, $ruleCollege] = $this->matchProgramRule($raw);
+        }
         $known = $course !== null;
         if ($course === null) {
             $course = $raw;
         }
-        $college = $this->courseToCollege[mb_strtoupper($course)] ?? '';
+        $college = $ruleCollege ?? $this->courseToCollege[mb_strtoupper($course)] ?? '';
 
         return [$course, $college, $known && $college !== ''];
+    }
+
+    /** Keyword fallback (import_codes.php 'program_rules') for labels with typos / free text. @return array{0:?string,1:?string} [course, college] */
+    private function matchProgramRule(string $raw): array
+    {
+        $label = trim(preg_replace('/[^A-Z0-9]+/', ' ', mb_strtoupper($raw)));
+        foreach ($this->programRules as [$regex, $course, $college]) {
+            if (preg_match($regex, $label)) {
+                return [$course, $college];
+            }
+        }
+
+        return [null, null];
     }
 
     private function emailExists(string $email): bool
