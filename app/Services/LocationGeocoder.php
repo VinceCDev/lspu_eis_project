@@ -51,4 +51,55 @@ class LocationGeocoder
 
         return ['lat' => (float) $data[0]['lat'], 'lng' => (float) $data[0]['lon']];
     }
+
+    /**
+     * Best-effort coordinates for a free-text "city" + province. Tries the exact place first, then progressively
+     * coarser guesses so a place Nominatim doesn't know ("San Veronica SPC") still lands on the map at its
+     * municipality/city, and as a last resort at the province:
+     *   1. "City, Province"
+     *   2. each comma-separated part of the city (address style "Brgy X, San Pablo City"), street/barangay/number
+     *      words stripped, last part first
+     *   3. the province alone
+     * Sleeps between Nominatim calls (usage policy), so one call may take a few seconds.
+     *
+     * @return array{lat: float, lng: float, level: string}|null level = 'place' | 'city' | 'province'
+     */
+    public function lookupWithFallback(string $city, string $province): ?array
+    {
+        $city = trim($city);
+        $province = trim($province);
+        $tried = [];
+        $attempt = function (string $query, string $level) use (&$tried): ?array {
+            $q = mb_strtolower($query);
+            if ($query === '' || isset($tried[$q])) {
+                return null;
+            }
+            $tried[$q] = true;
+            if ($tried !== [$q => true]) {
+                usleep(self::SLEEP_MICROSECONDS);
+            }
+            $at = $this->lookup($query);
+
+            return $at === null ? null : $at + ['level' => $level];
+        };
+
+        if ($city !== '' && $province !== '' && ($hit = $attempt("{$city}, {$province}", 'place'))) {
+            return $hit;
+        }
+
+        $parts = array_reverse(array_filter(array_map('trim', explode(',', $city))));
+        foreach ($parts as $part) {
+            $clean = trim(preg_replace('/\b(brgy|barangay|purok|sitio|blk|block|lot|phase|st|street|ave|avenue|subd|subdivision)\b\.?|[#\d]+/i', ' ', $part));
+            $clean = trim(preg_replace('/\s+/', ' ', $clean));
+            if (mb_strlen($clean) >= 3 && ($hit = $attempt($province !== '' ? "{$clean}, {$province}" : $clean, 'city'))) {
+                return $hit;
+            }
+        }
+
+        if ($province !== '' && ($hit = $attempt($province, 'province'))) {
+            return $hit;
+        }
+
+        return null;
+    }
 }

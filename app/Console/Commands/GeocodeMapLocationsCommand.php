@@ -14,7 +14,7 @@ use Illuminate\Console\Command;
  * Fills location_geocode_cache for alumni locations that have no coordinates yet, so the Dashboard map never has to
  * geocode while a user waits (the old path did up to 8 sequential Nominatim calls inside the page's request).
  *
- * Most-populated locations first, place-like strings only, at most --limit lookups per run at Nominatim's 1 req/s.
+ * Most-populated locations first, at most --limit lookups per run at Nominatim's 1 req/s.
  * Scheduled hourly (routes/console.php); safe to run by hand and to re-run.
  */
 class GeocodeMapLocationsCommand extends Command
@@ -35,7 +35,9 @@ class GeocodeMapLocationsCommand extends Command
 
         $todo = [];
         foreach ($clusters as $key => $c) {
-            if (!isset($known[$key]) && $geocoder->looksLikePlace($key)) {
+            // Not filtered by looksLikePlace() any more: an address-like or unknown place falls back to its
+            // municipality/city, then its province, instead of staying off the map. Only blank/gibberish is skipped.
+            if (!isset($known[$key]) && ($c['city'] !== '' || $c['province'] !== '') && mb_strlen($key) <= 120) {
                 $todo[$key] = $c['count'];
             }
         }
@@ -49,16 +51,16 @@ class GeocodeMapLocationsCommand extends Command
             if ($tried >= $limit) {
                 break;
             }
-            $coords = $geocoder->lookup($key);
+            $coords = $geocoder->lookupWithFallback((string) $clusters[$key]['city'], (string) $clusters[$key]['province']);
             $tried++;
             if ($coords !== null) {
                 $cache->set($key, $coords['lat'], $coords['lng']);
                 $found++;
-                $this->line("  + {$key}  ({$coords['lat']}, {$coords['lng']})");
+                $this->line("  + {$key}  ({$coords['lat']}, {$coords['lng']})".($coords['level'] === 'place' ? '' : "  [approx: {$coords['level']}]"));
             } else {
                 $this->line("  - {$key}  (not found)");
             }
-            usleep(LocationGeocoder::SLEEP_MICROSECONDS);
+            usleep(LocationGeocoder::SLEEP_MICROSECONDS);   // fallback attempts sleep between themselves
         }
 
         if ($found > 0) {
