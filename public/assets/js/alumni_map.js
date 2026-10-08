@@ -34,7 +34,7 @@
     }
 
     function label(loc) {
-        return loc.city + ', ' + loc.province;
+        return [loc.city, loc.province].filter(function (p) { return p && String(p).trim() !== ''; }).join(', ');
     }
 
     function popupContent(loc, onView) {

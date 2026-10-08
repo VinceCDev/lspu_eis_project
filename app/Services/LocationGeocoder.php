@@ -61,6 +61,21 @@ class LocationGeocoder
         return implode(', ', array_filter([trim((string) $city), trim((string) $province)], static fn ($p) => $p !== ''));
     }
 
+    /** Philippine provinces, so "Rizal Laguna" / "Candelaria Quezon" (no comma) can be split into town + province. */
+    private const PROVINCES = [
+        'Abra', 'Agusan del Norte', 'Agusan del Sur', 'Aklan', 'Albay', 'Antique', 'Apayao', 'Aurora', 'Basilan', 'Bataan',
+        'Batanes', 'Batangas', 'Benguet', 'Biliran', 'Bohol', 'Bukidnon', 'Bulacan', 'Cagayan', 'Camarines Norte',
+        'Camarines Sur', 'Camiguin', 'Capiz', 'Catanduanes', 'Cavite', 'Cebu', 'Cotabato', 'Davao de Oro', 'Davao del Norte',
+        'Davao del Sur', 'Davao Occidental', 'Davao Oriental', 'Dinagat Islands', 'Eastern Samar', 'Guimaras', 'Ifugao',
+        'Ilocos Norte', 'Ilocos Sur', 'Iloilo', 'Isabela', 'Kalinga', 'La Union', 'Laguna', 'Lanao del Norte', 'Lanao del Sur',
+        'Leyte', 'Maguindanao del Norte', 'Maguindanao del Sur', 'Marinduque', 'Masbate', 'Metro Manila', 'Misamis Occidental',
+        'Misamis Oriental', 'Mountain Province', 'Negros Occidental', 'Negros Oriental', 'Northern Samar', 'Nueva Ecija',
+        'Nueva Vizcaya', 'Occidental Mindoro', 'Oriental Mindoro', 'Palawan', 'Pampanga', 'Pangasinan', 'Quezon', 'Quirino',
+        'Rizal', 'Romblon', 'Samar', 'Sarangani', 'Siquijor', 'Sorsogon', 'South Cotabato', 'Southern Leyte', 'Sultan Kudarat',
+        'Sulu', 'Surigao del Norte', 'Surigao del Sur', 'Tarlac', 'Tawi-Tawi', 'Zambales', 'Zamboanga del Norte',
+        'Zamboanga del Sur', 'Zamboanga Sibugay',
+    ];
+
     /** Abbreviations alumni type in the address fields. */
     private const ABBREVIATIONS = [
         '/\bSPC\b/i' => 'San Pablo City',
@@ -72,6 +87,25 @@ class LocationGeocoder
 
     /** Words that describe a spot inside a town (not the town itself) - dropped before searching. */
     private const ADDRESS_WORDS = '/\b(brgy|bgy|barangay|purok|sitio|zone|blk|block|lot|phase|st|street|interior|ave|avenue|road|rd|subd|subdivision|village|compound)\b\.?|[#\d]+/i';
+
+    /**
+     * "Rizal Laguna" -> ["Rizal", "Laguna"]: a piece that ends in a known province and has more text before it. Without
+     * this, Nominatim reads the comma-less "Rizal Laguna" as Rizal Park in Manila. Longest province name wins.
+     *
+     * @return string[]
+     */
+    private function splitTrailingProvince(string $piece): array
+    {
+        $best = null;
+        foreach (self::PROVINCES as $province) {
+            if (preg_match('/^(.+?)[\s,]+'.preg_quote($province, '/').'$/iu', $piece, $m)
+                && ($best === null || mb_strlen($province) > mb_strlen($best[1]))) {
+                $best = [trim($m[1]), $province];
+            }
+        }
+
+        return $best === null ? [$piece] : [$best[0], $best[1]];
+    }
 
     /**
      * Best-effort coordinates for a messy City + Province pair. Alumni fill these fields inconsistently: the whole
@@ -90,8 +124,10 @@ class LocationGeocoder
         foreach ([$city, $province] as $field) {
             foreach (explode(',', $field) as $part) {
                 $clean = trim(preg_replace('/\s+/', ' ', preg_replace(self::ADDRESS_WORDS, ' ', preg_replace(array_keys(self::ABBREVIATIONS), array_values(self::ABBREVIATIONS), $part))));
-                if (mb_strlen($clean) >= 3 && !in_array(mb_strtolower($clean), array_map('mb_strtolower', $pieces), true)) {
-                    $pieces[] = $clean;
+                foreach ($this->splitTrailingProvince($clean) as $piece) {
+                    if (mb_strlen($piece) >= 3 && !in_array(mb_strtolower($piece), array_map('mb_strtolower', $pieces), true)) {
+                        $pieces[] = $piece;
+                    }
                 }
             }
         }

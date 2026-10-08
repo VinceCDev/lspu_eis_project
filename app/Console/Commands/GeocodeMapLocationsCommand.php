@@ -9,6 +9,7 @@ use App\Services\LocationGeocoder;
 use App\Services\ReportingSummary;
 use App\Support\HeavyCache;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Fills location_geocode_cache for alumni locations that have no coordinates yet, so the Dashboard map never has to
@@ -19,7 +20,7 @@ use Illuminate\Console\Command;
  */
 class GeocodeMapLocationsCommand extends Command
 {
-    protected $signature = 'map:geocode-locations {--limit=20 : Max Nominatim lookups this run}';
+    protected $signature = 'map:geocode-locations {--limit=20 : Max Nominatim lookups this run} {--reset : Forget every cached coordinate first (use after the geocoder logic changed)}';
 
     protected $description = 'Geocode alumni locations missing from the map cache (background; the Dashboard never does this itself).';
 
@@ -28,6 +29,11 @@ class GeocodeMapLocationsCommand extends Command
         $limit = max(1, (int) $this->option('limit'));
         $geocoder = new LocationGeocoder();
         $cache = new GeocodeCache();
+
+        if ($this->option('reset')) {
+            DB::table('location_geocode_cache')->truncate();
+            $this->warn('Cleared the geocode cache; every location will be looked up again.');
+        }
 
         // alumniMap() returns clusters keyed "City, Province" with their alumni count.
         $clusters = (new DashboardStats(null))->alumniMap();
@@ -63,7 +69,7 @@ class GeocodeMapLocationsCommand extends Command
             usleep(LocationGeocoder::SLEEP_MICROSECONDS);   // fallback attempts sleep between themselves
         }
 
-        if ($found > 0) {
+        if ($found > 0 || $this->option('reset')) {
             // New pins => the cached map payloads (every campus scope + "all") are out of date.
             $scopes = [ReportingSummary::scopeFor(null)];
             foreach ((new Campus())->all() as $campus) {
