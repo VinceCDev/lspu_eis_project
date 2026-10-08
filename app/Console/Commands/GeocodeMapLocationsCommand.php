@@ -15,7 +15,7 @@ use Illuminate\Console\Command;
  * geocode while a user waits (the old path did up to 8 sequential Nominatim calls inside the page's request).
  *
  * Most-populated locations first, at most --limit lookups per run at Nominatim's 1 req/s.
- * Scheduled hourly (routes/console.php); safe to run by hand and to re-run.
+ * Scheduled every 5 minutes (routes/console.php); safe to run by hand and to re-run.
  */
 class GeocodeMapLocationsCommand extends Command
 {

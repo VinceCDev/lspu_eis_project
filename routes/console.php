@@ -15,4 +15,4 @@ Schedule::command('imports:reap')->everyMinute()->withoutOverlapping(5);
 Schedule::command('reporting:refresh')->everyMinute()->withoutOverlapping(5);
 Schedule::command('imports:reap --purge')->dailyAt('03:30');
 // Alumni Location map: geocode new locations in the background so the Dashboard never does it while a user waits.
-Schedule::command('map:geocode-locations --limit=20')->hourly()->withoutOverlapping(30);
+Schedule::command('map:geocode-locations --limit=50')->everyFiveMinutes()->withoutOverlapping(30);
