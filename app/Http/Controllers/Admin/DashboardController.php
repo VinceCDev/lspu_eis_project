@@ -146,8 +146,9 @@ class DashboardController extends Controller
         $city = trim((string) $request->query('city', ''));
         $province = trim((string) $request->query('province', ''));
 
-        if ($city === '' || $province === '') {
-            return response()->json(['success' => false, 'message' => 'city and province are required.']);
+        // A pin may carry only one of the two (alumni often fill just one box), so either is enough.
+        if ($city === '' && $province === '') {
+            return response()->json(['success' => false, 'message' => 'city or province is required.']);
         }
 
         $perPage = 20;
@@ -202,8 +203,9 @@ class DashboardController extends Controller
         $city = trim((string) $request->query('city', ''));
         $province = trim((string) $request->query('province', ''));
 
-        if ($city === '' || $province === '') {
-            return response()->json(['success' => false, 'message' => 'city and province are required.']);
+        // A pin may carry only one of the two (alumni often fill just one box), so either is enough.
+        if ($city === '' && $province === '') {
+            return response()->json(['success' => false, 'message' => 'city or province is required.']);
         }
 
         if (Session::isStarted()) {
