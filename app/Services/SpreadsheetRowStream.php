@@ -213,7 +213,9 @@ final class SpreadsheetRowStream
             's' => $this->shared[(int) $v] ?? '',
             'b' => $v === '1' ? 'TRUE' : 'FALSE',
             'e' => '',
-            default => $v,
+            // Some exporters write whole numbers as "1.0" / "44826.0"; Excel writes "1". Normalise so
+            // running numbers, date serials and phone numbers read the same either way.
+            default => preg_match('/^-?\d+\.0+$/', $v) ? (string) (int) $v : $v,
         };
     }
 
